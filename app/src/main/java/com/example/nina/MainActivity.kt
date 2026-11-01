@@ -178,6 +178,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     val currentButtons = if (navigationStack.isEmpty()) boutons else navigationStack.last().content
                     val stackSize = navigationStack.size
 
+                    // Colonnes réellement masquées : elles réapparaissent le temps d'un guidage qui passe par elles
+                    val columnsHiddenOnScreen = SideColumns.hiddenOnScreen(sideColumnsHidden, guideSteps, coreWords, quickFires)
+
                     var sidebarRect by remember { mutableStateOf(value = Rect.Zero) }
                     var quickFiresRect by remember { mutableStateOf(value = Rect.Zero) }
                     // Positions des cases visibles de chaque zone (pour savoir quelle case est survolée pendant un glisser-déposer)
@@ -206,8 +209,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     var rightPreviousRect by remember { mutableStateOf(Rect.Zero) }
                     var rightNextRect by remember { mutableStateOf(Rect.Zero) }
                     // Colonnes masquées : on oublie leurs zones, pour qu'un glisser-déposer n'y dépose ni n'y tourne de page
-                    LaunchedEffect(sideColumnsHidden) {
-                        if (sideColumnsHidden) {
+                    LaunchedEffect(columnsHiddenOnScreen) {
+                        if (columnsHiddenOnScreen) {
                             sidebarRect = Rect.Zero; quickFiresRect = Rect.Zero
                             leftPreviousRect = Rect.Zero; leftNextRect = Rect.Zero
                             rightPreviousRect = Rect.Zero; rightNextRect = Rect.Zero
@@ -465,13 +468,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                     phrase = phrase, haptic = haptic, isMuted = mediaMuted,
                                     onSpeak = speakSentence, onMutedClick = { showVolumePanel(context) },
                                     onWordFinder = { showWordFinder = true }, onKeyboard = { showKeyboardDialog = true },
-                                    showBack = SideColumns.showBackButton(navigationStack.size, sideColumnsHidden),
+                                    showBack = SideColumns.showBackButton(navigationStack.size, columnsHiddenOnScreen),
                                     onBack = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         speakText("Retour", voicePitch, voiceRate)
                                         if (navigationStack.isNotEmpty()) navigationStack.removeAt(navigationStack.size - 1)
                                     },
-                                    trailing = if (sideColumnsHidden) lockButton else null
+                                    trailing = if (columnsHiddenOnScreen) lockButton else null
                                 )
 
                                 // --- BANDEAU DE MODÉLISATION ---
@@ -492,7 +495,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                 // --- ZONE DE CONTENU PRINCIPALE ---
                                 Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                                     // A. COLONNE DE GAUCHE : 🏠 Accueil puis les dossiers (absente quand les colonnes sont masquées)
-                                    if (!sideColumnsHidden) {
+                                    if (!columnsHiddenOnScreen) {
                                         FolderColumn(
                                             cells = coreWords, openFolderId = navigationStack.firstOrNull()?.id, isHome = navigationStack.isEmpty(),
                                             ui = cellUi,
@@ -539,7 +542,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                             }
 
                             // 2. COLONNE DE DROITE : cadenas et phrases rapides (absente quand les colonnes sont masquées)
-                            if (!sideColumnsHidden) {
+                            if (!columnsHiddenOnScreen) {
                                 QuickPhrasesColumn(
                                     cells = quickFires, ui = cellUi,
                                     paging = PagingUi(rightPage, { rightPage = it }, { if (it != rightLayout) rightLayout = it }, { previous, next -> rightPreviousRect = previous; rightNextRect = next }),

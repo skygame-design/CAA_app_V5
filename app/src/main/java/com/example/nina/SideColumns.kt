@@ -14,4 +14,18 @@ object SideColumns {
      */
     fun showBackButton(folderDepth: Int, columnsHidden: Boolean): Boolean =
         if (columnsHidden) folderDepth >= 1 else folderDepth >= 2
+
+    /** Le guidage (loupe 🔍) passe par une case des colonnes : dossier de gauche ou phrase rapide. */
+    fun guideNeedsColumns(steps: List<AACCell>, coreWords: List<AACCell>, quickFires: List<AACCell>): Boolean {
+        val columnIds = (coreWords + quickFires).mapTo(HashSet()) { it.id }
+        return steps.any { it.id in columnIds }
+    }
+
+    /**
+     * Colonnes réellement masquées à l'écran. Si le guidage passe par une colonne, elles réapparaissent
+     * le temps du guidage (toutes ses étapes, pour que la grille ne change pas de largeur en cours de route),
+     * puis se masquent à nouveau. Le réglage enregistré, lui, ne change pas.
+     */
+    fun hiddenOnScreen(hiddenSetting: Boolean, steps: List<AACCell>, coreWords: List<AACCell>, quickFires: List<AACCell>): Boolean =
+        hiddenSetting && !guideNeedsColumns(steps, coreWords, quickFires)
 }

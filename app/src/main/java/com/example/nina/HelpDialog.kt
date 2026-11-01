@@ -171,7 +171,8 @@ private val helpTopics = listOf(
                 )
             ),
             HelpText("Conseil : montrez le chemin vous-même pendant que l'enfant regarde, puis laissez-le refaire. C'est la « modélisation », recommandée en CAA."),
-            HelpTip("« Arrêter » dans le bandeau annule le guidage. Les pictos masqués ne sont pas proposés.")
+            HelpTip("« Arrêter » dans le bandeau annule le guidage. Les pictos masqués ne sont pas proposés."),
+            HelpTip("Colonnes masquées : si le chemin passe par un dossier de gauche ou une phrase rapide, les colonnes réapparaissent le temps du guidage, puis se masquent à nouveau.", isNew = true)
         )
     ),
     HelpTopic(
