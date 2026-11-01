@@ -141,6 +141,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     var voiceRate by remember { mutableFloatStateOf(context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).getFloat("voice_rate", 0.85f)) }
                     var debounceTime by remember { mutableLongStateOf(context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).getLong("debounce_time", 500L)) }
                     var autoReturnHome by remember { mutableStateOf(context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).getBoolean("auto_return_home", true)) }
+                    // Colonnes latérales masquées : la grille seule occupe l'écran (voir SideColumns)
+                    var sideColumnsHidden by remember { mutableStateOf(context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).getBoolean(SideColumns.PREF_KEY, false)) }
 
                     var isKioskMode by remember { mutableStateOf(false) }
                     val activity = context as? android.app.Activity
@@ -203,6 +205,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     var rightLayout by remember { mutableStateOf(GridLayout(1, 1, 1)) }
                     var rightPreviousRect by remember { mutableStateOf(Rect.Zero) }
                     var rightNextRect by remember { mutableStateOf(Rect.Zero) }
+                    // Colonnes masquées : on oublie leurs zones, pour qu'un glisser-déposer n'y dépose ni n'y tourne de page
+                    LaunchedEffect(sideColumnsHidden) {
+                        if (sideColumnsHidden) {
+                            sidebarRect = Rect.Zero; quickFiresRect = Rect.Zero
+                            leftPreviousRect = Rect.Zero; leftNextRect = Rect.Zero
+                            rightPreviousRect = Rect.Zero; rightNextRect = Rect.Zero
+                        }
+                    }
 
                     // Cherche les images des pictos marqués "FETCH" et télécharge dans la tablette celles encore sur le web,
                     // puis enregistre : les pictos restent visibles hors réseau
@@ -344,6 +354,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                     columnCount = it
                                     context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).edit().putInt("column_count", it).apply()
                                 },
+                                sideColumnsHidden = sideColumnsHidden,
+                                onSideColumnsToggle = {
+                                    sideColumnsHidden = !sideColumnsHidden
+                                    context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).edit().putBoolean(SideColumns.PREF_KEY, sideColumnsHidden).apply()
+                                },
                                 onAddToGrid = { showAddDialog = true },
                                 onAddToLeft = { isAddingToCore = true; showAddDialog = true },
                                 onAddToQuick = { isAddingToQuickFires = true; showAddDialog = true },
@@ -422,6 +437,16 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         val sideItemHeight = if (gaze.gridOn) 130.dp else 80.dp
                         val sideGap = if (gaze.gridOn) 24.dp else 12.dp
                         val speakButton: (String) -> Unit = { speakText(it, voicePitch, voiceRate) }
+                        // Cadenas discret : il faut le maintenir 2 s pour ouvrir le mode adulte.
+                        // En haut de la colonne de droite, ou en haut à droite de l'écran quand les colonnes sont masquées.
+                        val lockButton: @Composable () -> Unit = {
+                            HoldLockButton(
+                                isAdminMode = isAdminMode,
+                                onHoldComplete = { showAdminChallengeDialog = true },
+                                onLock = { isAdminMode = false; isEditMode = false },
+                                warning = voiceStatus == VoiceStatus.NETWORK_ONLY || voiceStatus == VoiceStatus.MISSING
+                            )
+                        }
 
                         Row(modifier = Modifier.fillMaxSize()) {
 
@@ -440,12 +465,13 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                     phrase = phrase, haptic = haptic, isMuted = mediaMuted,
                                     onSpeak = speakSentence, onMutedClick = { showVolumePanel(context) },
                                     onWordFinder = { showWordFinder = true }, onKeyboard = { showKeyboardDialog = true },
-                                    showBack = navigationStack.size > 1,
+                                    showBack = SideColumns.showBackButton(navigationStack.size, sideColumnsHidden),
                                     onBack = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         speakText("Retour", voicePitch, voiceRate)
                                         if (navigationStack.isNotEmpty()) navigationStack.removeAt(navigationStack.size - 1)
-                                    }
+                                    },
+                                    trailing = if (sideColumnsHidden) lockButton else null
                                 )
 
                                 // --- BANDEAU DE MODÉLISATION ---
@@ -465,29 +491,31 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
                                 // --- ZONE DE CONTENU PRINCIPALE ---
                                 Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                                    // A. COLONNE DE GAUCHE : 🏠 Accueil puis les dossiers
-                                    FolderColumn(
-                                        cells = coreWords, openFolderId = navigationStack.firstOrNull()?.id, isHome = navigationStack.isEmpty(),
-                                        ui = cellUi,
-                                        paging = PagingUi(leftPage, { leftPage = it }, { if (it != leftLayout) leftLayout = it }, { previous, next -> leftPreviousRect = previous; leftNextRect = next }),
-                                        minItemHeight = sideItemHeight, gap = sideGap, onSpeak = speakButton, cellBounds = leftCellsBounds,
-                                        onHome = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            speakText("Accueil", voicePitch, voiceRate)
-                                            navigationStack.clear()
-                                            gridPage = 0 // Retour à la première page, même si l'on était déjà à l'accueil
-                                        },
-                                        onCellClick = onFolderColumnClick,
-                                        onCellLongPress = { openWordForms(it, false) }, // false : picto de la colonne
-                                        modifier = Modifier
-                                            .width(120.dp)
-                                            .fillMaxHeight()
-                                            .padding(bottom = 16.dp)
-                                            .onGloballyPositioned { sidebarRect = it.boundsInRoot() }
-                                    )
+                                    // A. COLONNE DE GAUCHE : 🏠 Accueil puis les dossiers (absente quand les colonnes sont masquées)
+                                    if (!sideColumnsHidden) {
+                                        FolderColumn(
+                                            cells = coreWords, openFolderId = navigationStack.firstOrNull()?.id, isHome = navigationStack.isEmpty(),
+                                            ui = cellUi,
+                                            paging = PagingUi(leftPage, { leftPage = it }, { if (it != leftLayout) leftLayout = it }, { previous, next -> leftPreviousRect = previous; leftNextRect = next }),
+                                            minItemHeight = sideItemHeight, gap = sideGap, onSpeak = speakButton, cellBounds = leftCellsBounds,
+                                            onHome = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                speakText("Accueil", voicePitch, voiceRate)
+                                                navigationStack.clear()
+                                                gridPage = 0 // Retour à la première page, même si l'on était déjà à l'accueil
+                                            },
+                                            onCellClick = onFolderColumnClick,
+                                            onCellLongPress = { openWordForms(it, false) }, // false : picto de la colonne
+                                            modifier = Modifier
+                                                .width(120.dp)
+                                                .fillMaxHeight()
+                                                .padding(bottom = 16.dp)
+                                                .onGloballyPositioned { sidebarRect = it.boundsInRoot() }
+                                        )
 
-                                    // Séparateur
-                                    Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp, vertical = 8.dp).width(2.dp).background(Color.LightGray.copy(alpha = 0.5f)))
+                                        // Séparateur
+                                        Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp, vertical = 8.dp).width(2.dp).background(Color.LightGray.copy(alpha = 0.5f)))
+                                    }
 
                                     // B. GRILLE CENTRALE (Dossiers et Vocabulaire)
                                     Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
@@ -510,23 +538,17 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                 }
                             }
 
-                            // 2. COLONNE DE DROITE : cadenas et phrases rapides
-                            QuickPhrasesColumn(
-                                cells = quickFires, ui = cellUi,
-                                paging = PagingUi(rightPage, { rightPage = it }, { if (it != rightLayout) rightLayout = it }, { previous, next -> rightPreviousRect = previous; rightNextRect = next }),
-                                minItemHeight = sideItemHeight, gap = sideGap, onSpeak = speakButton, cellBounds = rightCellsBounds,
-                                lockButton = {
-                                    // Cadenas discret : il faut le maintenir 2 s pour ouvrir le mode adulte
-                                    HoldLockButton(
-                                        isAdminMode = isAdminMode,
-                                        onHoldComplete = { showAdminChallengeDialog = true },
-                                        onLock = { isAdminMode = false; isEditMode = false },
-                                        warning = voiceStatus == VoiceStatus.NETWORK_ONLY || voiceStatus == VoiceStatus.MISSING
-                                    )
-                                },
-                                onCellClick = onQuickPhraseClick,
-                                columnModifier = Modifier.onGloballyPositioned { quickFiresRect = it.boundsInRoot() }
-                            )
+                            // 2. COLONNE DE DROITE : cadenas et phrases rapides (absente quand les colonnes sont masquées)
+                            if (!sideColumnsHidden) {
+                                QuickPhrasesColumn(
+                                    cells = quickFires, ui = cellUi,
+                                    paging = PagingUi(rightPage, { rightPage = it }, { if (it != rightLayout) rightLayout = it }, { previous, next -> rightPreviousRect = previous; rightNextRect = next }),
+                                    minItemHeight = sideItemHeight, gap = sideGap, onSpeak = speakButton, cellBounds = rightCellsBounds,
+                                    lockButton = lockButton,
+                                    onCellClick = onQuickPhraseClick,
+                                    columnModifier = Modifier.onGloballyPositioned { quickFiresRect = it.boundsInRoot() }
+                                )
+                            }
                         }
                         }
                     }

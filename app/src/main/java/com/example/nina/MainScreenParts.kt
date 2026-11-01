@@ -109,7 +109,8 @@ fun InteractiveCell(
 fun TopBar(
     phrase: SnapshotStateList<AACCell>, haptic: HapticFeedback, isMuted: Boolean,
     onSpeak: () -> Unit, onMutedClick: () -> Unit, onWordFinder: () -> Unit, onKeyboard: () -> Unit,
-    showBack: Boolean, onBack: () -> Unit
+    showBack: Boolean, onBack: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null // Colonnes masquées : le cadenas vient ici, en haut à droite
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -167,6 +168,8 @@ fun TopBar(
                 }
             }
         }
+
+        trailing?.invoke()
     }
 }
 

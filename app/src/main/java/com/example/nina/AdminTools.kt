@@ -90,6 +90,7 @@ fun AdminToolbar(
     showMore: Boolean, onMoreToggle: (Boolean) -> Unit,
     isEditMode: Boolean, onEditModeToggle: (Boolean) -> Unit,
     columnCount: Int, onColumnCountChange: (Int) -> Unit,
+    sideColumnsHidden: Boolean, onSideColumnsToggle: () -> Unit,
     onAddToGrid: () -> Unit, onAddToLeft: () -> Unit, onAddToQuick: () -> Unit, onSettings: () -> Unit, onStats: () -> Unit, onHelp: () -> Unit,
     onCalibration: () -> Unit, isKioskMode: Boolean, onKioskToggle: () -> Unit,
     onBackup: () -> Unit, onRestore: () -> Unit,
@@ -153,6 +154,12 @@ fun AdminToolbar(
                 Icon(Icons.Default.Add, contentDescription = "Plus de pictos par rangée")
             }
         }
+
+        // Colonnes latérales (dossiers, phrases rapides) : masquées, la grille seule occupe l'écran (commande oculaire sur 2 ou 4 pictos)
+        AdminToolButton(
+            Icons.Default.ViewColumn, if (sideColumnsHidden) "Colonnes masquées" else "Colonnes",
+            onSideColumnsToggle, selected = sideColumnsHidden
+        )
 
         Spacer(modifier = Modifier.weight(1f))
 

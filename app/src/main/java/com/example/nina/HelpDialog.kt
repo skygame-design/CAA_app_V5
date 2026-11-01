@@ -209,6 +209,7 @@ private val helpTopics = listOf(
                     "Statistiques" to "suivi de l'utilisation",
                     "Aide" to "cette aide",
                     "− 4 par rangée +" to "taille de la grille, de 1 à 8 pictos par rangée",
+                    "Colonnes" to "masque les dossiers (gauche) et les phrases rapides (droite) : la grille seule occupe l'écran ; touche à nouveau pour les remettre. Le cadenas passe en haut à droite, et ← ramène à l'accueil",
                     "⋮" to "calibrer le tactile, mode Kiosque, partager / restaurer la sauvegarde, grilles prêtes",
                     "Verrouiller" to "referme le mode adulte (l'édition s'arrête aussi)"
                 )
@@ -316,6 +317,7 @@ private val helpTopics = listOf(
                 )
             ),
             HelpTip("Interrupteur général en haut de la fenêtre Commande oculaire : désactivée, la caméra est éteinte et rien ne réagit au regard ; réglages et calibration sont gardés pour la prochaine fois."),
+            HelpTip("Pour 2 ou 4 grands pictos seulement : mode adulte › « − par rangée + » (2 par rangée par exemple) puis « Colonnes » pour masquer les colonnes de gauche et de droite. « Colonnes masquées » les remet.", isNew = true),
             HelpTip("La sélection par le regard est coupée en mode adulte et quand une fenêtre est ouverte. Les phrases rapides, Accueil, Play, ⌫, ← et les boutons de page se choisissent aussi du regard.")
         )
     ),
