@@ -1,0 +1,72 @@
+# Compile l'appli de test « Nina (test) » (variante essai) à chaque envoi de code, après les tests unitaires.
+# L'APK se télécharge :
+#  - depuis la version « Nina (test) – dernière compilation » (onglet Releases du dépôt) : fichier .apk direct, pratique sur tablette ;
+#  - ou depuis la page de la compilation (onglet Actions), en bas, « Artifacts » (fichier .zip contenant l'APK).
+# La version finale, signée avec la clé de l'ordinateur, n'est jamais compilée ici.
+name: APK de test
+
+on:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+  workflow_dispatch: # Bouton « Run workflow » dans l'onglet Actions
+
+# Une seule compilation à la fois : la plus récente remplace celle en cours
+concurrency:
+  group: apk-test
+  cancel-in-progress: true
+
+permissions:
+  contents: write # Mise à jour de la version « Nina (test) – dernière compilation »
+
+jobs:
+  apk-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Tests unitaires
+        run: bash gradlew --no-daemon testDebugUnitTest
+
+      - name: Compilation de l'APK de test
+        run: bash gradlew --no-daemon assembleEssai
+
+      - name: Nom du fichier
+        id: apk
+        run: |
+          name="Nina-test-${GITHUB_REF_NAME//\//-}-${GITHUB_SHA::7}.apk"
+          cp app/build/outputs/apk/essai/app-essai.apk "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: ${{ steps.apk.outputs.name }}
+          retention-days: 30
+
+      - name: Version « Nina (test) – dernière compilation »
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete nina-test --cleanup-tag --yes || true
+          gh release create nina-test "${{ steps.apk.outputs.name }}" \
+            --prerelease --target "$GITHUB_SHA" \
+            --title "Nina (test) – dernière compilation" \
+            --notes "APK de test compilé automatiquement depuis la branche ${GITHUB_REF_NAME} (commit ${GITHUB_SHA::7}). S'installe à côté de la vraie Nina, sans la toucher. Ce n'est pas la version finale."
+
+      - name: Rapport des tests en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapport-tests
+          path: app/build/reports/tests/
+          retention-days: 7
