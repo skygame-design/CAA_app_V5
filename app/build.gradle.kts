@@ -14,6 +14,7 @@ android {
         targetSdk = 35
         versionCode = 2
         versionName = "1.1"
+        manifestPlaceholders["appLabel"] = "Nina"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -34,9 +35,26 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // Clé de l'appli de test (variante « essai ») : enregistrée dans le dépôt, pour que l'appli de test compilée
+        // n'importe où (ordinateur, session cloud) se mette à jour sans désinstaller. Elle ne sert qu'à l'appli de test.
+        create("essai") {
+            storeFile = file("essai.keystore")
+            storePassword = "nina-essai"
+            keyAlias = "essai"
+            keyPassword = "nina-essai"
+        }
     }
 
     buildTypes {
+        // Appli de test « Nina (test) » : s'installe à côté de la vraie Nina sans la toucher (autre identifiant,
+        // donc ses propres grilles, photos, calibration et réglages). Compilation : ./gradlew assembleEssai
+        create("essai") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".essai"
+            versionNameSuffix = "-test"
+            manifestPlaceholders["appLabel"] = "Nina (test)"
+            signingConfig = signingConfigs.getByName("essai")
+        }
         release {
             signingConfig = signingConfigs.getByName("tablette")
             // Pas de réduction du code (R8) pour l'instant : elle peut casser la lecture des données enregistrées (Gson)
