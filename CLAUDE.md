@@ -2,7 +2,7 @@
 
 ## Le projet
 **Nina** est une application Android de **communication alternative et améliorée (CAA)** pour un enfant : grilles de pictogrammes, construction de phrases, synthèse vocale, mode adulte protégé par un cadenas (maintenir 2 s), commande oculaire expérimentale (caméra frontale).
-Cible principale : tablette **Redmi Pad Pro 2** (ARM 64 bits). Le développement a commencé sur PC Windows.
+Cible principale : tablette **Samsung Galaxy Tab A9+** (ARM 64 bits). Le développement a commencé sur PC Windows.
 
 - Dépôt de sauvegarde de la dernière version stable : `CAA_app_V4` (ne pas y toucher).
 - Ce dépôt (`CAA_app_V5`) : `main` = copie exacte de V4 ; le travail se fait sur la branche **`dev`**.
