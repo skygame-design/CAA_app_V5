@@ -87,7 +87,7 @@ private val helpTopics = listOf(
             HelpTip("À droite de la barre de phrase, la loupe 🔍 cherche un mot et peut montrer où il se trouve ; le clavier ⌨ permet d'écrire un mot qui n'a pas de picto."),
             HelpTip(
                 "Bien organiser : un mot = une seule place (l'enfant mémorise le geste). Gardez 6 à 8 grands dossiers et rangez le reste en sous-dossiers. " +
-                "Mode adulte › ⋮ › « Grilles prêtes » installe une grille complète (3 niveaux, de 12 à 30 mots à l'accueil), à adapter ensuite avec l'orthophoniste.",
+                "Mode adulte › Disposition › « Grilles prêtes » installe une grille complète (3 niveaux, de 12 à 30 mots à l'accueil), à adapter ensuite avec l'orthophoniste.",
                 isNew = true
             )
         )
@@ -99,7 +99,7 @@ private val helpTopics = listOf(
             HelpSteps(
                 "Installer une grille", listOf(
                     "Ouvrez le mode adulte (maintenir le cadenas 2 secondes, puis le calcul).",
-                    "Dans la barre jaune, touchez ⋮ puis « Grilles prêtes… ».",
+                    "Dans la barre jaune, touchez « Disposition » puis « Grilles prêtes… ».",
                     "Choisissez un niveau à gauche : l'aperçu à droite montre l'accueil, chaque dossier et les phrases rapides.",
                     "Touchez « Installer ». La grille, les dossiers, les phrases rapides et la taille de grille sont réglés d'un coup.",
                     "Les images se téléchargent dans la tablette (il faut du réseau une fois), puis tout fonctionne hors ligne."
@@ -113,7 +113,7 @@ private val helpTopics = listOf(
                 )
             ),
             HelpText("À l'accueil se trouvent les mots les plus employés par les enfants (moi, vouloir, encore, fini, pas…), rangés par couleur dans l'ordre de la phrase. D'un niveau à l'autre, chaque mot garde exactement sa place : les nouveaux mots s'ajoutent à droite et en bas. L'enfant peut donc passer au niveau suivant sans réapprendre ses gestes."),
-            HelpTip("Installer une grille remplace tous les pictos actuels. Votre disposition est gardée : ⋮ › « Revenir à la disposition précédente » la remet en place. Pour garder une copie durable, faites aussi ⋮ › « Partager / Sauvegarder » avant."),
+            HelpTip("Installer une grille remplace tous les pictos actuels. Votre disposition est gardée : Disposition › « Revenir à la disposition précédente » la remet en place. Pour garder une copie durable, faites aussi Réglages › « Partager / Sauvegarder » avant."),
             HelpTip("Ces listes sont un point de départ, pas un vocabulaire validé pour un enfant précis. Montrez-les à l'orthophoniste, puis adaptez-les : glisser-déposer, mode Édition, ajout de photos de la famille et des objets de la maison.")
         )
     ),
@@ -139,7 +139,7 @@ private val helpTopics = listOf(
                 ), arrow = true
             ),
             HelpText("Seul le premier verbe après le sujet est conjugué ; les suivants restent à l'infinitif (« je veux manger »). Nina n'ajoute pas les petits mots (le, à la…) : il faut les choisir."),
-            HelpTip("Après un mot choisi dans un dossier, la grille revient seule à l'accueil. Réglable dans Paramètres › Tactile.", isNew = true)
+            HelpTip("Après un mot choisi dans un dossier, la grille revient seule à l'accueil. Réglable dans Réglages › Paramètres › Tactile.", isNew = true)
         )
     ),
     HelpTopic(
@@ -206,13 +206,10 @@ private val helpTopics = listOf(
                 "La barre du mode adulte", listOf(
                     "Ajouter" to "créer un picto : dans la grille, la colonne des dossiers ou les phrases rapides",
                     "Édition" to "modifier les pictos (un crayon apparaît) ; le bouton reste foncé tant que l'édition est active",
-                    "Paramètres" to "couleurs, voix, réglages tactiles",
-                    "Statistiques" to "suivi de l'utilisation",
-                    "Aide" to "cette aide",
+                    "Disposition ▾" to "pictos par rangée (1 à 8), colonnes de gauche et de droite affichées ou masquées, grilles prêtes, revenir à la disposition précédente",
                     "Jeux" to "lance un moment de détente pour l'enfant (bulles, memory, couleurs, formes, coloriage), avec une durée",
-                    "− 4 par rangée +" to "taille de la grille, de 1 à 8 pictos par rangée",
-                    "Colonnes" to "masque les dossiers (gauche) et les phrases rapides (droite) : la grille seule occupe l'écran ; touche à nouveau pour les remettre. Le cadenas passe en haut à droite, et ← ramène à l'accueil",
-                    "⋮" to "calibrer le tactile, mode Kiosque, partager / restaurer la sauvegarde, grilles prêtes",
+                    "Réglages ▾" to "paramètres (couleurs, voix, tactile), commande oculaire, calibrer le tactile, mode Kiosque, statistiques, planche imprimable, sauvegardes",
+                    "?" to "cette aide",
                     "Verrouiller" to "referme le mode adulte (l'édition s'arrête aussi)"
                 )
             ),
@@ -262,7 +259,7 @@ private val helpTopics = listOf(
     HelpTopic(
         Icons.Default.BarChart, "Statistiques", "Suivi et export CSV", isNew = true,
         blocks = listOf(
-            HelpText("Chaque mot touché et chaque phrase lue avec ▶ sont notés avec la date et l'heure. Ces données restent sur la tablette."),
+            HelpText("Mode adulte › Réglages › Statistiques. Chaque mot touché et chaque phrase lue avec ▶ sont notés avec la date et l'heure. Ces données restent sur la tablette."),
             HelpRows(
                 null, listOf(
                     "Période" to "aujourd'hui, 7 jours, 30 jours ou tout",
@@ -322,7 +319,7 @@ private val helpTopics = listOf(
                 "Mise en place", listOf(
                     "Posez la tablette sur un support stable, face à l'enfant, à 40–60 cm, visage bien éclairé de face.",
                     "Réglez la taille de grille que l'enfant utilisera (3 ou 4 pictos par rangée conseillés).",
-                    "Mode adulte › ⋮ › Commande oculaire. Autorisez la caméra la première fois.",
+                    "Mode adulte › Réglages › Commande oculaire. Autorisez la caméra la première fois.",
                     "« Calibrer sur les pictos » : d'abord, les yeux restent sur l'étoile au centre pendant que la tête tourne doucement à gauche, à droite, en haut, en bas (quelques secondes). Puis l'enfant suit des yeux l'étoile, qui se pose sur chaque picto.",
                     "« Essai sur les pictos » : vérifiez qu'en fixant une case, l'anneau se remplit sur la bonne.",
                     "Activez « Sélection par le regard », puis refermez le cadenas."
@@ -358,7 +355,7 @@ private val helpTopics = listOf(
                 )
             ),
             HelpTip("Interrupteur général en haut de la fenêtre Commande oculaire : désactivée, la caméra est éteinte et rien ne réagit au regard ; réglages et calibration sont gardés pour la prochaine fois."),
-            HelpTip("Pour 2 ou 4 grands pictos seulement : mode adulte › « − par rangée + » (2 par rangée par exemple) puis « Colonnes » pour masquer les colonnes de gauche et de droite. « Colonnes masquées » les remet.", isNew = true),
+            HelpTip("Pour 2 ou 4 grands pictos seulement : mode adulte › Disposition : 2 pictos par rangée par exemple, puis décoche « Colonnes de gauche et de droite ». Coche-la à nouveau pour les remettre.", isNew = true),
             HelpTip("La sélection par le regard est coupée en mode adulte et quand une fenêtre est ouverte. Les phrases rapides, Accueil, Play, ⌫, ← et les boutons de page se choisissent aussi du regard.")
         )
     ),
@@ -377,7 +374,7 @@ private val helpTopics = listOf(
             HelpTip("Le fichier « Partager / Sauvegarder » emporte aussi les photos : une restauration sur une autre tablette les retrouve."),
             HelpSteps(
                 "Imprimer la planche", listOf(
-                    "Mode adulte › ⋮ › Planche imprimable.",
+                    "Mode adulte › Réglages › Planche imprimable.",
                     "Gardez le même nombre de pictos par rangée qu'à l'écran : les mots restent aux mêmes places.",
                     "« Imprimer » ouvre l'impression d'Android (imprimante, ou Enregistrer au format PDF) ; « Partager le PDF » l'envoie par mail, Drive…"
                 )
@@ -389,7 +386,7 @@ private val helpTopics = listOf(
         Icons.Default.Accessibility, "Réglages et accessibilité", "Vue, voix, toucher",
         blocks = listOf(
             HelpRows(
-                "Dans Paramètres", listOf(
+                "Dans Réglages › Paramètres", listOf(
                     "Son coupé" to "si le volume multimédia de la tablette est à zéro, une alerte rouge « Son coupé » apparaît dans la barre de phrase ; la toucher ouvre le réglage du volume",
                     "Veille" to "tant que Nina est ouverte, l'écran ne se met pas en veille et ne se verrouille pas",
                     "Contraste élevé (CVI)" to "fond noir et bordures jaunes, pour la déficience visuelle",
@@ -401,9 +398,9 @@ private val helpTopics = listOf(
             ),
             HelpRows(
                 "Dans la barre du mode adulte", listOf(
-                    "Taille de grille" to "boutons − et + de la barre du mode adulte : de 1 à 8 pictos par rangée. La grille remplit l'écran sans défiler ; s'il y a trop de pictos, des pages ◀ ▶ apparaissent. Nouveau",
-                    "⋮ › Calibrer le tactile" to "attraper 5 fois la coccinelle : l'écran se décale pour compenser",
-                    "⋮ › Mode Kiosque" to "empêche de quitter Nina par erreur"
+                    "Taille de grille" to "Disposition › − et + : de 1 à 8 pictos par rangée. La grille remplit l'écran sans défiler ; s'il y a trop de pictos, des pages ◀ ▶ apparaissent. Nouveau",
+                    "Réglages › Calibrer le tactile" to "attraper 5 fois la coccinelle : l'écran se décale pour compenser",
+                    "Réglages › Mode Kiosque" to "empêche de quitter Nina par erreur"
                 )
             ),
             HelpTip("Une fois la grille installée, évitez de changer le nombre de colonnes : l'enfant retient l'emplacement des mots."),
@@ -424,9 +421,9 @@ private val helpTopics = listOf(
         blocks = listOf(
             HelpRows(
                 null, listOf(
-                    "⋮ › Partager / Sauvegarder" to "crée un fichier avec la grille et les deux colonnes, à envoyer (Drive, mail…)",
-                    "⋮ › Restaurer" to "recharge un fichier de sauvegarde, y compris les anciennes",
-                    "⋮ › Sauvegardes automatiques" to "revenir à la grille d'un des 7 derniers jours, en cas de mauvaise manipulation. Nouveau"
+                    "Réglages › Partager / Sauvegarder" to "crée un fichier avec la grille et les deux colonnes, à envoyer (Drive, mail…)",
+                    "Réglages › Restaurer" to "recharge un fichier de sauvegarde, y compris les anciennes",
+                    "Réglages › Sauvegardes automatiques" to "revenir à la grille d'un des 7 derniers jours, en cas de mauvaise manipulation. Nouveau"
                 )
             ),
             HelpTip(

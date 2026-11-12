@@ -645,7 +645,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                         "La grille enregistrée n'a pas pu être lue. Elle a été récupérée depuis la sauvegarde automatique du " +
                                         "${it.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))}. Les changements faits après cette date sont perdus."
                                     } ?: ("La grille enregistrée n'a pas pu être lue et aucune sauvegarde n'existe : la grille de départ a été installée. " +
-                                         "Si vous avez un fichier de sauvegarde, utilisez ⋮ › Restaurer.")
+                                         "Si vous avez un fichier de sauvegarde, utilisez Réglages › Restaurer.")
                                 )
                             },
                             confirmButton = { Button(onClick = { loadNotice = false }) { Text("Compris") } }
