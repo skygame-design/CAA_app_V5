@@ -102,7 +102,7 @@ fun GazeCameraEffect(controller: GazeController, lifecycleOwner: LifecycleOwner)
  * et fenêtre Commande oculaire. Pas de sélection en mode adulte, ni quand une fenêtre est ouverte (elle cache les pictos).
  */
 @Composable
-fun GazeLayer(controller: GazeController, registry: GazeZoneRegistry, isAdminMode: Boolean, anyDialogOpen: Boolean) {
+fun GazeLayer(controller: GazeController, registry: GazeZoneRegistry, isAdminMode: Boolean, anyDialogOpen: Boolean, learningAllowed: Boolean = true) {
     val model = controller.model
     if (controller.active && model != null) {
         GazeSelectionOverlay(
@@ -110,7 +110,7 @@ fun GazeLayer(controller: GazeController, registry: GazeZoneRegistry, isAdminMod
             selectionEnabled = controller.selectionEnabled && !isAdminMode && !anyDialogOpen,
             dwellMs = controller.dwellMs,
             showRawPoint = controller.cursorEnabled,
-            learningEnabled = !isAdminMode && !anyDialogOpen,
+            learningEnabled = learningAllowed && !isAdminMode && !anyDialogOpen,
             zoom = if (controller.twoStep) controller.zoom else null,
             samples = controller.profile?.samples.orEmpty(),
             learnedOffsetY = controller.profile?.autoOffsetY ?: 0.0,

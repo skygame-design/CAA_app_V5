@@ -97,6 +97,7 @@ fun AdminToolbar(
     onRecommendedLayout: () -> Unit, onRestorePreviousLayout: (() -> Unit)?, // null : rien à restaurer
     onAutoBackups: () -> Unit,
     onEyeGaze: () -> Unit,
+    onGames: () -> Unit,
     onPrintBoard: () -> Unit,
     voiceWarning: String?, onVoiceFix: () -> Unit, // null : la voix fonctionne hors ligne
     onLock: () -> Unit,
@@ -140,6 +141,7 @@ fun AdminToolbar(
         AdminToolButton(Icons.Default.Settings, "Paramètres", onSettings)
         AdminToolButton(Icons.Default.BarChart, "Statistiques", onStats)
         AdminToolButton(Icons.AutoMirrored.Filled.Help, "Aide", onHelp)
+        AdminToolButton(Icons.Default.SportsEsports, "Jeux", onGames) // Moment de détente pour l'enfant
 
         // Taille de la grille : pictos par rangée (1 à 8)
         Row(

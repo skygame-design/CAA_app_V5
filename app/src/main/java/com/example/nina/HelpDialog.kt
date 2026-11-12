@@ -209,6 +209,7 @@ private val helpTopics = listOf(
                     "Paramètres" to "couleurs, voix, réglages tactiles",
                     "Statistiques" to "suivi de l'utilisation",
                     "Aide" to "cette aide",
+                    "Jeux" to "lance un moment de détente pour l'enfant (bulles, memory, couleurs, formes, coloriage), avec une durée",
                     "− 4 par rangée +" to "taille de la grille, de 1 à 8 pictos par rangée",
                     "Colonnes" to "masque les dossiers (gauche) et les phrases rapides (droite) : la grille seule occupe l'écran ; touche à nouveau pour les remettre. Le cadenas passe en haut à droite, et ← ramène à l'accueil",
                     "⋮" to "calibrer le tactile, mode Kiosque, partager / restaurer la sauvegarde, grilles prêtes",
@@ -272,6 +273,35 @@ private val helpTopics = listOf(
                 )
             ),
             HelpTip("« Remettre à zéro » demande une confirmation, puis efface tout l'historique.")
+        )
+    ),
+    HelpTopic(
+        Icons.Default.SportsEsports, "Jeux", "Un moment de détente après le travail", isNew = true,
+        blocks = listOf(
+            HelpSteps(
+                "Lancer les jeux", listOf(
+                    "Mode adulte › Jeux.",
+                    "Choisis la durée (5, 10, 15, 20 minutes ou sans limite), puis « Lancer les jeux ».",
+                    "Le mode adulte se referme et l'enfant choisit son jeu. Le bouton ▦ en haut à gauche revient au choix des jeux."
+                )
+            ),
+            HelpRows(
+                "Les jeux", listOf(
+                    "Bulles" to "de grosses bulles montent : on les éclate. Aucun échec possible",
+                    "Memory" to "retrouver les paires, avec les pictos de l'enfant (le mot est dit). De 2 à 6 paires : une de plus à chaque partie gagnée",
+                    "Couleurs" to "« Montre le rouge » : de 2 à 4 choix. Après deux erreurs, la bonne réponse clignote",
+                    "Formes" to "« Montre l'étoile » : rond, carré, triangle, étoile, cœur",
+                    "Coloriage" to "chaque partie touchée se colorie, et la couleur est dite. La flèche donne un autre dessin"
+                )
+            ),
+            HelpSteps(
+                "Fin de la séance", listOf(
+                    "La barre en haut montre le temps qui reste. Une minute avant la fin, Nina prévient.",
+                    "À la fin : « C'est fini ! À bientôt », puis retour à la grille.",
+                    "Pour revenir à la grille plus tôt : maintiens le cadenas 2 secondes (pas de calcul à faire)."
+                )
+            ),
+            HelpTip("Tous les jeux se jouent au doigt ou du regard, si la commande oculaire est active. Pendant les jeux, la calibration ne s'enrichit pas.")
         )
     ),
     HelpTopic(
