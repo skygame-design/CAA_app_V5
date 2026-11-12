@@ -98,12 +98,19 @@ private const val BURST_NANOS = 450_000_000L
 private val bubbleColors = GameColor.entries.map { Color(it.argb) }
 
 @Composable
-fun BubblesGame(fx: GameFx) {
+fun BubblesGame(fx: GameFx, settings: GamesSettings = GamesSettings()) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val w = constraints.maxWidth.toFloat(); val h = constraints.maxHeight.toFloat()
         if (w <= 0f || h <= 0f) return@BoxWithConstraints
         val aspect = (w / h).toDouble()
-        val field = remember(aspect) { BubbleField(Random(System.nanoTime()), aspect) }
+        val field = remember(aspect) {
+            val speed = settings.bubbleSpeed.factor
+            BubbleField(
+                Random(System.nanoTime()), aspect, slots = settings.bubbleCount,
+                minRadius = settings.bubbleSize.minRadius, maxRadius = settings.bubbleSize.maxRadius,
+                minSpeed = 0.05 * speed, maxSpeed = 0.08 * speed
+            )
+        }
         var bubbles by remember(field) { mutableStateOf(field.current) }
         var clock by remember { mutableLongStateOf(0L) }
         val bursts = remember { mutableStateListOf<BubbleBurst>() }

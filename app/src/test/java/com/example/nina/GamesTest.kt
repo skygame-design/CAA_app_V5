@@ -291,3 +291,84 @@ class ColoringTest {
         assertEquals(ids.size, ids.toSet().size)
     }
 }
+
+class GamesSettingsTest {
+    @Test
+    fun enregistrementPuisLecture_redonneLesMemesReglages() {
+        val settings = GamesSettings(
+            games = setOf(GameKind.BULLES, GameKind.COLORIAGE),
+            bubbleSpeed = BubbleSpeed.LENTE, bubbleSize = BubbleSize.TRES_GRANDE, bubbleCount = 3,
+            memoryStartPairs = 4, memoryProgressive = false, memoryUsePictos = false,
+            findStartChoices = 3, findProgressive = false,
+            findColors = setOf(GameColor.ROUGE, GameColor.BLEU), findShapes = setOf(GameShape.ROND, GameShape.ETOILE),
+            coloringColors = setOf("rouge", "jaune"), coloringChooseColor = true, coloringPictures = setOf("poisson")
+        )
+        val stored = settings.toMap()
+        assertEquals(settings, GamesSettings.fromMap { stored[it] })
+    }
+
+    @Test
+    fun reglagesAbsentsOuIllisibles_valeursParDefaut() {
+        assertEquals(GamesSettings(), GamesSettings.fromMap { null })
+        val broken = mapOf(
+            "games_enabled" to "INCONNU", "games_bubble_speed" to "TURBO", "games_bubble_count" to "beaucoup",
+            "games_memory_progressive" to "peut-être", "games_find_colors" to "ROUGE", "games_coloring_pictures" to "dragon"
+        )
+        val read = GamesSettings.fromMap { broken[it] }
+        assertEquals(GameKind.entries.toSet(), read.games) // Aucun jeu : tous
+        assertEquals(BubbleSpeed.NORMALE, read.bubbleSpeed)
+        assertEquals(5, read.bubbleCount)
+        assertTrue(read.memoryProgressive)
+        assertEquals(GameColor.entries.toSet(), read.findColors) // Une seule couleur : pas jouable, toutes
+        assertEquals(ColoringPictures.all.map { it.name }.toSet(), read.coloringPictures)
+    }
+
+    @Test
+    fun valeursRameneesDansLesLimites() {
+        val s = GamesSettings(bubbleCount = 50, memoryStartPairs = 1, findStartChoices = 9, coloringColors = emptySet()).normalized()
+        assertEquals(8, s.bubbleCount)
+        assertEquals(2, s.memoryStartPairs)
+        assertEquals(4, s.findStartChoices)
+        assertEquals(ColoringPalette, s.coloringPalette)
+    }
+
+    @Test
+    fun progression_desactivee_resteAuDepart() {
+        assertEquals(6, GamesSettings(memoryStartPairs = 3).memoryMaxPairs)
+        assertEquals(3, GamesSettings(memoryStartPairs = 3, memoryProgressive = false).memoryMaxPairs)
+        assertEquals(2, GamesSettings(findProgressive = false).findMaxChoices)
+        val p = FindProgress(3, maxCount = 3)
+        repeat(10) { p.success() }
+        assertEquals(3, p.optionCount)
+    }
+
+    @Test
+    fun menu_seulementLesJeuxChoisis_dansLOrdre() {
+        assertEquals(listOf(GameKind.BULLES, GameKind.COLORIAGE), GamesSettings(games = setOf(GameKind.COLORIAGE, GameKind.BULLES)).menuGames)
+    }
+
+    @Test
+    fun couleursEtFormes_seulementCellesChoisies() {
+        val colors = listOf(GameColor.ROUGE, GameColor.BLEU)
+        val shapes = listOf(GameShape.ROND, GameShape.COEUR, GameShape.CARRE)
+        val random = Random(8)
+        repeat(100) {
+            val c = FindRounds.next(FindKind.COULEUR, 4, random, colors = colors, shapes = shapes)
+            assertEquals(2, c.options.size) // 4 demandés, mais seulement 2 couleurs choisies
+            assertTrue(c.options.all { it.color in colors && it.shape in shapes })
+            val f = FindRounds.next(FindKind.FORME, 4, random, colors = colors, shapes = shapes)
+            assertEquals(3, f.options.size)
+            assertTrue(f.options.all { it.color in colors && it.shape in shapes })
+        }
+    }
+
+    @Test
+    fun bulles_nombreTailleEtVitesseReglables() {
+        val size = BubbleSize.TRES_GRANDE
+        val field = BubbleField(Random(4), aspect = 1.6, slots = 3, minRadius = size.minRadius, maxRadius = size.maxRadius,
+            minSpeed = 0.05 * BubbleSpeed.LENTE.factor, maxSpeed = 0.08 * BubbleSpeed.LENTE.factor)
+        repeat(500) { field.step(0.02) }
+        assertEquals(3, field.current.size)
+        assertTrue(field.current.all { it.radius in size.minRadius..size.maxRadius && it.speed <= 0.08 * 0.6 + 1e-9 })
+    }
+}

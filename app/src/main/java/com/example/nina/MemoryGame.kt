@@ -106,11 +106,13 @@ class MemoryBoard(val pairs: Int, random: Random) {
 }
 
 @Composable
-fun MemoryGame(pictos: List<AACCell>, fx: GameFx) {
+fun MemoryGame(pictos: List<AACCell>, fx: GameFx, settings: GamesSettings = GamesSettings()) {
     val random = remember { Random(System.nanoTime()) }
-    var pairs by remember { mutableIntStateOf(2) }
+    var pairs by remember { mutableIntStateOf(settings.memoryStartPairs) }
+    // Réglage « formes de couleur » : pas de pictos
+    val faceSource = remember { if (settings.memoryUsePictos) pictos else emptyList() }
     var round by remember { mutableIntStateOf(0) }
-    val faces = remember(round) { memoryFaces(pictos, pairs, random) }
+    val faces = remember(round) { memoryFaces(faceSource, pairs, random) }
     val board = remember(round) { MemoryBoard(pairs, random) }
     var cards by remember(round) { mutableStateOf(board.cards) }
     var won by remember(round) { mutableStateOf(false) }
@@ -125,7 +127,7 @@ fun MemoryGame(pictos: List<AACCell>, fx: GameFx) {
             delay(900)
             fx.celebrate("Bravo !")
             delay(2600)
-            pairs = (pairs + 1).coerceAtMost(MemoryBoard.MAX_PAIRS)
+            pairs = (pairs + 1).coerceAtMost(settings.memoryMaxPairs)
             round++
         }
     }

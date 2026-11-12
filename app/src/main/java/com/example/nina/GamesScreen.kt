@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -96,6 +97,7 @@ private data class Celebration(val text: String, val id: Long)
 fun GamesScreen(
     session: GamesSession,
     pictos: List<AACCell>, // Pictos de l'enfant (avec image), pour le memory
+    settings: GamesSettings,
     isCviMode: Boolean,
     speak: (String) -> Unit,
     onExit: () -> Unit
@@ -171,14 +173,14 @@ fun GamesScreen(
                 when {
                     over -> GamesEndScreen(textColor)
                     else -> when (val kind = current) {
-                        null -> GamesMenu(textColor) { picked -> current = picked; speakLatest.value(picked.spoken) }
+                        null -> GamesMenu(settings.menuGames, textColor) { picked -> current = picked; speakLatest.value(picked.spoken) }
                         else -> key(kind) {
                             when (kind) {
-                                GameKind.BULLES -> BubblesGame(fx)
-                                GameKind.MEMORY -> MemoryGame(pictos, fx)
-                                GameKind.COULEURS -> FindGame(FindKind.COULEUR, fx, textColor)
-                                GameKind.FORMES -> FindGame(FindKind.FORME, fx, textColor)
-                                GameKind.COLORIAGE -> ColoringGame(fx, textColor)
+                                GameKind.BULLES -> BubblesGame(fx, settings)
+                                GameKind.MEMORY -> MemoryGame(pictos, fx, settings)
+                                GameKind.COULEURS -> FindGame(FindKind.COULEUR, fx, textColor, settings)
+                                GameKind.FORMES -> FindGame(FindKind.FORME, fx, textColor, settings)
+                                GameKind.COLORIAGE -> ColoringGame(fx, textColor, settings)
                             }
                         }
                     }
@@ -204,7 +206,7 @@ private fun GamesTimerBar(fraction: Float, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun GamesMenu(textColor: Color, onPick: (GameKind) -> Unit) {
+private fun GamesMenu(games: List<GameKind>, textColor: Color, onPick: (GameKind) -> Unit) {
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 8.dp)) {
         Text(
             "On joue !", fontSize = 44.sp, fontWeight = FontWeight.Bold, color = textColor,
@@ -215,7 +217,7 @@ private fun GamesMenu(textColor: Color, onPick: (GameKind) -> Unit) {
             modifier = Modifier.weight(1f).fillMaxWidth().padding(bottom = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            GameKind.entries.forEach { kind ->
+            games.forEach { kind ->
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -328,8 +330,16 @@ private fun GamesEndScreen(textColor: Color) {
 
 /** Mode adulte › Jeux : durée de la séance, puis lancement. */
 @Composable
-fun GamesLaunchDialog(initialMinutes: Int, onDismiss: () -> Unit, onLaunch: (Int) -> Unit) {
+fun GamesLaunchDialog(
+    initialMinutes: Int, settings: GamesSettings, onSettingsSave: (GamesSettings) -> Unit,
+    onDismiss: () -> Unit, onLaunch: (Int) -> Unit
+) {
     var minutes by remember { mutableIntStateOf(initialMinutes) }
+    var showSettings by remember { mutableStateOf(false) }
+    if (showSettings) {
+        GamesSettingsDialog(settings, onDismiss = { showSettings = false }, onSave = { onSettingsSave(it); showSettings = false })
+        return
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Moment de jeux", fontWeight = FontWeight.Bold) },
@@ -347,6 +357,11 @@ fun GamesLaunchDialog(initialMinutes: Int, onDismiss: () -> Unit, onLaunch: (Int
                         "Une minute avant la fin, Nina prévient. Pour revenir à la grille plus tôt : maintenir le cadenas 2 secondes.",
                     fontSize = 14.sp, color = Color.Gray
                 )
+                OutlinedButton(onClick = { showSettings = true }) {
+                    Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Réglages des jeux…")
+                }
             }
         },
         confirmButton = {

@@ -2,6 +2,7 @@ package com.example.nina
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -188,23 +189,50 @@ fun DrawScope.drawColoringPicture(picture: ColoringPicture, fills: Map<String, I
 }
 
 @Composable
-fun ColoringGame(fx: GameFx, textColor: Color) {
+fun ColoringGame(fx: GameFx, textColor: Color, settings: GamesSettings = GamesSettings()) {
+    val pictures = remember { settings.pictures.ifEmpty { ColoringPictures.all } }
+    // Couleurs choisies dans les réglages, repérées par leur place dans la palette complète
+    val palette = remember { settings.coloringPalette.ifEmpty { ColoringPalette }.map { ColoringPalette.indexOf(it) } }
     var pictureIndex by remember { mutableIntStateOf(0) }
-    val picture = ColoringPictures.all[pictureIndex % ColoringPictures.all.size]
+    val picture = pictures[pictureIndex % pictures.size]
     val fills = remember(pictureIndex) { mutableStateMapOf<String, Int>() }
     var nextColor by remember { mutableIntStateOf(0) }
+    var chosen by remember { mutableIntStateOf(palette.first()) } // Couleur choisie (mode palette)
     var done by remember(pictureIndex) { mutableStateOf(false) }
 
     val paint: (ColoringRegion) -> Unit = { region ->
-        val color = nextColor % ColoringPalette.size
-        nextColor++
+        val color = if (settings.coloringChooseColor) chosen else palette[nextColor++ % palette.size]
         fills[region.id] = color
         fx.sounds.play(GameSound.TAP)
-        fx.speak(ColoringPalette[color].label)
+        // Mode palette : la couleur a été dite en la choisissant
+        if (!settings.coloringChooseColor) fx.speak(ColoringPalette[color].label)
         if (!done && fills.size == picture.regions.size) { done = true; fx.celebrate("Bravo, c'est magnifique !") }
     }
 
     Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        // Palette : l'enfant choisit sa couleur (au doigt ou du regard)
+        if (settings.coloringChooseColor) {
+            Column(
+                modifier = Modifier.width(110.dp).fillMaxHeight().padding(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                palette.forEach { index ->
+                    val color = ColoringPalette[index]
+                    val selected = index == chosen
+                    Box(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .heightIn(max = 96.dp)
+                            .aspectRatio(1f)
+                            .clip(CircleShape)
+                            .background(Color(color.argb))
+                            .border(if (selected) 8.dp else 2.dp, if (selected) textColor else Color.White, CircleShape)
+                            .gameTarget("couleur_$index") { chosen = index; fx.sounds.play(GameSound.TAP); fx.speak(color.label) }
+                    )
+                }
+            }
+        }
         BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxHeight().padding(bottom = 16.dp)) {
             val side = minOf(maxWidth, maxHeight)
             Box(modifier = Modifier.offset((maxWidth - side) / 2, (maxHeight - side) / 2).size(side)) {
@@ -223,24 +251,26 @@ fun ColoringGame(fx: GameFx, textColor: Color) {
                 }
             }
         }
-        // Autre dessin
-        Column(
-            modifier = Modifier.width(170.dp).fillMaxHeight(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(130.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFFF8F00))
-                    .gameTarget("dessin_suivant") { pictureIndex++; fx.speak("Un autre dessin") },
-                contentAlignment = Alignment.Center
+        // Autre dessin (seulement s'il y en a plusieurs)
+        if (pictures.size > 1) {
+            Column(
+                modifier = Modifier.width(170.dp).fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Autre dessin", tint = Color.White, modifier = Modifier.size(72.dp))
+                Box(
+                    modifier = Modifier
+                        .size(130.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFF8F00))
+                        .gameTarget("dessin_suivant") { pictureIndex++; fx.speak("Un autre dessin") },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Autre dessin", tint = Color.White, modifier = Modifier.size(72.dp))
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Autre dessin", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = textColor)
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Autre dessin", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = textColor)
         }
     }
 }

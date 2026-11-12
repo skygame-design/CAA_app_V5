@@ -301,6 +301,16 @@ private val helpTopics = listOf(
                     "Pour revenir à la grille plus tôt : maintiens le cadenas 2 secondes (pas de calcul à faire)."
                 )
             ),
+            HelpRows(
+                "Réglages des jeux (Jeux › Réglages des jeux…)", listOf(
+                    "Jeux" to "les jeux proposés à l'enfant",
+                    "Bulles" to "vitesse (lente, normale, rapide), taille, nombre de bulles à l'écran (3 à 8)",
+                    "Memory" to "paires au départ (2 à 6), une paire de plus ou non à chaque partie gagnée, pictos de l'enfant ou formes de couleur",
+                    "Couleurs / formes" to "choix au départ (2 à 4), progression ou non, couleurs et formes utilisées",
+                    "Coloriage" to "couleurs utilisées, dessins proposés, et palette pour que l'enfant choisisse sa couleur"
+                )
+            ),
+            HelpTip("Avec la commande oculaire : bulles lentes, grandes et peu nombreuses ; peu de couleurs dans la palette du coloriage (les pastilles sont plus grandes)."),
             HelpTip("Tous les jeux se jouent au doigt ou du regard, si la commande oculaire est active. Pendant les jeux, la calibration ne s'enrichit pas.")
         )
     ),

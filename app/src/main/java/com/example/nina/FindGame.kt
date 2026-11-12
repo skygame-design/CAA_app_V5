@@ -45,18 +45,21 @@ object FindRounds {
      * Nouvelle manche : couleurs = même forme en couleurs différentes ; formes = même couleur, formes différentes.
      * La réponse n'est jamais la même que celle de la manche précédente.
      */
-    fun next(kind: FindKind, optionCount: Int, random: Random, previous: FindRound? = null): FindRound {
-        val n = optionCount.coerceIn(2, 4)
+    fun next(
+        kind: FindKind, optionCount: Int, random: Random, previous: FindRound? = null,
+        colors: List<GameColor> = GameColor.entries, shapes: List<GameShape> = GameShape.entries // Choisies dans les réglages
+    ): FindRound {
         val options = when (kind) {
             FindKind.COULEUR -> {
-                val shape = GameShape.entries.random(random)
-                GameColor.entries.shuffled(random).take(n).map { FindOption(shape, it) }
+                val shape = shapes.random(random)
+                colors.shuffled(random).take(optionCount.coerceIn(2, 4).coerceAtMost(colors.size)).map { FindOption(shape, it) }
             }
             FindKind.FORME -> {
-                val color = GameColor.entries.random(random)
-                GameShape.entries.shuffled(random).take(n).map { FindOption(it, color) }
+                val color = colors.random(random)
+                shapes.shuffled(random).take(optionCount.coerceIn(2, 4).coerceAtMost(shapes.size)).map { FindOption(it, color) }
             }
         }
+        val n = options.size
         var answer = random.nextInt(n)
         if (previous != null && previous.kind == kind && sameTarget(kind, options[answer], previous.target)) answer = (answer + 1) % n
         return FindRound(kind, options, answer)
@@ -66,25 +69,27 @@ object FindRounds {
         if (kind == FindKind.COULEUR) a.color == b.color else a.shape == b.shape
 }
 
-/** Difficulté : 2 cibles au départ, une de plus après 3 réussites d'affilée (jusqu'à 4). */
-class FindProgress(optionCount: Int = 2) {
+/** Difficulté : 2 cibles au départ, une de plus après 3 réussites d'affilée (jusqu'à maxCount, 4 au plus). */
+class FindProgress(optionCount: Int = 2, private val maxCount: Int = 4) {
     var optionCount = optionCount
         private set
     private var streak = 0
 
     fun success() {
         streak++
-        if (streak >= 3 && optionCount < 4) { optionCount++; streak = 0 }
+        if (streak >= 3 && optionCount < maxCount.coerceAtMost(4)) { optionCount++; streak = 0 }
     }
 
     fun error() { streak = 0 }
 }
 
 @Composable
-fun FindGame(kind: FindKind, fx: GameFx, textColor: Color) {
+fun FindGame(kind: FindKind, fx: GameFx, textColor: Color, settings: GamesSettings = GamesSettings()) {
     val random = remember { Random(System.nanoTime()) }
-    val progress = remember { FindProgress() }
-    var round by remember { mutableStateOf(FindRounds.next(kind, progress.optionCount, random)) }
+    val progress = remember { FindProgress(settings.findStartChoices, settings.findMaxChoices) }
+    val colors = remember { settings.findColors.sortedBy { it.ordinal } }
+    val shapes = remember { settings.findShapes.sortedBy { it.ordinal } }
+    var round by remember { mutableStateOf(FindRounds.next(kind, progress.optionCount, random, colors = colors, shapes = shapes)) }
     var errors by remember(round) { mutableIntStateOf(0) }
     var solved by remember(round) { mutableStateOf(false) }
     var shakeIndex by remember(round) { mutableStateOf<Int?>(null) }
@@ -92,7 +97,7 @@ fun FindGame(kind: FindKind, fx: GameFx, textColor: Color) {
 
     LaunchedEffect(round) { delay(500); fx.speak(round.instruction) }
     LaunchedEffect(solved) {
-        if (solved) { delay(2600); round = FindRounds.next(kind, progress.optionCount, random, round) }
+        if (solved) { delay(2600); round = FindRounds.next(kind, progress.optionCount, random, round, colors, shapes) }
     }
     // La forme choisie à tort tremble un peu
     LaunchedEffect(shakeIndex, errors) {

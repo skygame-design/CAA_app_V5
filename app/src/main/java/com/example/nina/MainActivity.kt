@@ -354,6 +354,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                             GamesScreen(
                                 session = session,
                                 pictos = remember(session) { playablePictos(boutons + coreWords + quickFires) },
+                                settings = remember(session) { GamesSettings.load(prefs) },
                                 isCviMode = isCviMode,
                                 speak = { speakText(it, voicePitch, voiceRate) },
                                 onExit = { gamesSession = null }
@@ -587,6 +588,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     if (showGamesLaunch) {
                         GamesLaunchDialog(
                             initialMinutes = prefs.getInt(GAMES_MINUTES_PREF, 10),
+                            settings = GamesSettings.load(prefs),
+                            onSettingsSave = { GamesSettings.save(prefs, it) },
                             onDismiss = { showGamesLaunch = false },
                             onLaunch = { minutes ->
                                 prefs.edit().putInt(GAMES_MINUTES_PREF, minutes).apply()
