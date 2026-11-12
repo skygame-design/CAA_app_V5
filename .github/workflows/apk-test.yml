@@ -47,10 +47,14 @@ jobs:
           cp app/build/outputs/apk/essai/app-essai.apk "$name"
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
+      # L'APK et son fichier mapping.txt : le code est réduit et renommé (R8), ce fichier permet de relire
+      # un rapport de plantage (Android Studio › Analyze Stack Trace, ou l'outil retrace du SDK)
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.apk.outputs.name }}
-          path: ${{ steps.apk.outputs.name }}
+          path: |
+            ${{ steps.apk.outputs.name }}
+            app/build/outputs/mapping/essai/mapping.txt
           retention-days: 30
 
       - name: Version « Nina (test) – dernière compilation »

@@ -10,8 +10,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -111,8 +111,11 @@ fun BubblesGame(fx: GameFx, settings: GamesSettings = GamesSettings()) {
                 minSpeed = 0.05 * speed, maxSpeed = 0.08 * speed
             )
         }
-        var bubbles by remember(field) { mutableStateOf(field.current) }
-        var clock by remember { mutableLongStateOf(0L) }
+        // Une case d'état par place : à chaque image, position, taille et couleur sont relues au placement et au
+        // dessin seulement. Les bulles ne sont jamais recomposées (60 fois par seconde, ça se voyait).
+        val slots = remember(field) { field.current.map { mutableStateOf(it) } }
+        val frameNanos = remember { LongArray(1) } // Heure de la dernière image (hors état : lue au moment d'un éclat)
+        var clock by remember { mutableLongStateOf(0L) } // Ne bouge que pendant un éclat : redessine les éclats
         val bursts = remember { mutableStateListOf<BubbleBurst>() }
         var popped by remember { mutableIntStateOf(0) }
 
@@ -121,40 +124,46 @@ fun BubblesGame(fx: GameFx, settings: GamesSettings = GamesSettings()) {
             while (true) {
                 withFrameNanos { t ->
                     field.step(((t - last) / 1e9).coerceIn(0.0, 0.05))
-                    last = t; clock = t
-                    bubbles = field.current
-                    bursts.removeAll { t - it.startNanos > BURST_NANOS }
+                    last = t; frameNanos[0] = t
+                    field.current.forEachIndexed { i, bubble -> slots[i].value = bubble }
+                    if (bursts.isNotEmpty()) { clock = t; bursts.removeAll { t - it.startNanos > BURST_NANOS } }
                 }
             }
         }
 
         val pop: (Int) -> Unit = { slot ->
             field.pop(slot)?.let { b ->
-                bursts.add(BubbleBurst(b.displayX(aspect), b.y, b.radius, b.colorIndex, clock))
-                bubbles = field.current
+                bursts.add(BubbleBurst(b.displayX(aspect), b.y, b.radius, b.colorIndex, frameNanos[0]))
+                slots[slot].value = field.current[slot]
                 fx.sounds.play(GameSound.POP)
                 popped++
                 if (popped % 10 == 0) fx.celebrate("Bravo !") // Encouragement toutes les 10 bulles
             }
         }
 
-        val density = LocalDensity.current
-        bubbles.forEach { b ->
-            key(b.slot) {
-                val diameter = with(density) { (b.radius * 2 * h).toFloat().toDp() }
+        slots.forEachIndexed { slot, state ->
+            key(slot) {
                 Box(
                     modifier = Modifier
-                        .offset { IntOffset(((b.displayX(aspect) - b.radiusX(aspect)) * w).roundToInt(), ((b.y - b.radius) * h).roundToInt()) }
-                        .size(diameter)
-                        .graphicsLayer { scaleX = b.scale.toFloat(); scaleY = b.scale.toFloat(); alpha = b.alpha.toFloat() }
-                        .gameTarget("bulle_${b.slot}") { pop(b.slot) }
+                        .layout { measurable, _ ->
+                            val b = state.value
+                            val d = (b.radius * 2 * h).roundToInt().coerceAtLeast(1)
+                            val placeable = measurable.measure(Constraints.fixed(d, d))
+                            layout(d, d) {
+                                placeable.place(((b.displayX(aspect) - b.radiusX(aspect)) * w).roundToInt(), ((b.y - b.radius) * h).roundToInt())
+                            }
+                        }
+                        .graphicsLayer { val b = state.value; scaleX = b.scale.toFloat(); scaleY = b.scale.toFloat(); alpha = b.alpha.toFloat() }
+                        .gameTarget("bulle_$slot") { pop(slot) }
                 ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) { drawBubble(bubbleColors[b.colorIndex]) }
+                    Canvas(modifier = Modifier.fillMaxSize()) { drawBubble(bubbleColors[state.value.colorIndex]) }
                 }
             }
         }
-        // Éclats (anneau et gouttelettes qui s'écartent)
-        Canvas(modifier = Modifier.fillMaxSize()) { bursts.forEach { drawBurst(it, clock, w, h) } }
+        // Éclats (anneau et gouttelettes qui s'écartent) : redessinés seulement tant qu'il y en a
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            if (bursts.isNotEmpty()) { val now = clock; bursts.forEach { drawBurst(it, now, w, h) } }
+        }
     }
 }
 

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,8 +42,13 @@ import androidx.compose.ui.unit.sp
  * et remontent les actions.
  */
 
-/** Ce qu'il faut pour afficher et faire réagir une case, identique dans les trois zones. */
-class CellUi(
+/**
+ * Ce qu'il faut pour afficher et faire réagir une case, identique dans les trois zones.
+ * Classe de valeurs immuable : si rien n'a changé, Compose ne recompose pas les cases qui la reçoivent
+ * (sans cela, chaque toucher recomposait toutes les cases de l'écran).
+ */
+@Immutable
+data class CellUi(
     val haptic: HapticFeedback,
     val debounceTime: Long,
     val isAdminMode: Boolean,
@@ -52,8 +58,9 @@ class CellUi(
     val dnd: DragAndDropState
 )
 
-/** Pagination d'une zone : page affichée, disposition calculée, zones des boutons de page. */
-class PagingUi(
+/** Pagination d'une zone : page affichée, disposition calculée, zones des boutons de page. Immuable, comme CellUi. */
+@Immutable
+data class PagingUi(
     val page: Int,
     val onPageChange: (Int) -> Unit,
     val onLayout: (GridLayout) -> Unit,

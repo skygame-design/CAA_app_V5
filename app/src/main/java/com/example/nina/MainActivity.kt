@@ -147,7 +147,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     var isKioskMode by remember { mutableStateOf(false) }
                     val activity = context as? android.app.Activity
 
-                    var usageStats by remember { mutableStateOf(loadStats(context)) }
+                    // Statistiques d'utilisation, lues seulement quand la fenêtre s'ouvre : un toucher ne recompose pas tout l'écran
+                    var usageStats by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
 
                     // Modélisation : cases à toucher dans l'ordre pour atteindre un mot (dossiers puis mot)
                     var guideSteps by remember { mutableStateOf<List<AACCell>>(emptyList()) }
@@ -223,8 +224,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     // Cherche les images des pictos marqués "FETCH" et télécharge dans la tablette celles encore sur le web,
                     // puis enregistre : les pictos restent visibles hors réseau
                     suspend fun fetchAndSaveImages() {
-                        withContext(Dispatchers.IO) { updateCellsWithImages(context, boutons, coreWords, quickFires) }
-                        storage.saveAll(boutons, coreWords, quickFires)
+                        val changed = withContext(Dispatchers.IO) { updateCellsWithImages(context, boutons, coreWords, quickFires) }
+                        if (changed) storage.saveAll(boutons, coreWords, quickFires)
                     }
 
                     // Grilles prêtes : sauvegarde de l'ancienne disposition pour pouvoir revenir en arrière
@@ -381,7 +382,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                     onAddToLeft = { isAddingToCore = true; showAddDialog = true },
                                     onAddToQuick = { isAddingToQuickFires = true; showAddDialog = true },
                                     onSettings = { showSettingsDialog = true },
-                                    onStats = { showStatsDialog = true },
+                                    onStats = { usageStats = loadStats(context); showStatsDialog = true },
                                     onHelp = { showHelpDialog = true },
                                     onCalibration = { showCalibration = true },
                                     isKioskMode = isKioskMode,
@@ -428,7 +429,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                     navigationStack.add(cell)
                                 } else {
                                     playCellAudio(cell, voicePitch, voiceRate)
-                                    trackWordUsage(cell, context, { usageStats = it }); advanceGuide(cell)
+                                    trackWordUsage(cell); advanceGuide(cell)
                                     if (!cell.isQuickPhrase) phrase.add(cell)
                                 }
                             }
@@ -436,7 +437,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                 if (isEditMode) editCell(cell)
                                 else {
                                     playCellAudio(cell, voicePitch, voiceRate)
-                                    trackWordUsage(cell, context, { usageStats = it }); advanceGuide(cell)
+                                    trackWordUsage(cell); advanceGuide(cell)
                                     if (cell.isFolder) navigationStack.add(cell)
                                     else {
                                         if (!cell.isQuickPhrase) phrase.add(cell)
@@ -449,7 +450,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                 if (isEditMode) editCell(cell)
                                 else {
                                     playCellAudio(cell, voicePitch, voiceRate)
-                                    trackWordUsage(cell, context, { usageStats = it }); advanceGuide(cell)
+                                    trackWordUsage(cell); advanceGuide(cell)
                                 }
                             }
                             // Regard : cases plus hautes et plus espacées dans les colonnes
@@ -683,7 +684,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                 // La forme choisie remplace le mot de base dans la phrase, et c'est elle qui est prononcée
                                 phrase.add(baseCell.copy(id = newCellId(), label = form.text, spokenText = null, audioPath = null))
                                 speakText(form.text, voicePitch, voiceRate)
-                                trackWordUsage(baseCell, context, { usageStats = it }); advanceGuide(baseCell)
+                                trackWordUsage(baseCell); advanceGuide(baseCell)
                                 if (wordFormsFromGrid && autoReturnHome) navigationStack.clear()
                                 wordFormsCell = null
                             },
@@ -727,7 +728,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         },
                         onWordFinderDismiss = { showWordFinder = false },
                         showStats = showStatsDialog, usageStats = usageStats, onStatsDismiss = { showStatsDialog = false }, onStatsReset = {
-                            usageStats = emptyMap(); saveStats(context, emptyMap())
+                            usageStats = emptyMap(); statsCache = mutableMapOf(); saveStats(context, emptyMap())
                             scope.launch(Dispatchers.IO) { UsageLog.clear(context) }
                         },
                         showEditDialog = showEditDialog, cellToEdit = cellToEdit, allButtons = boutons,
@@ -803,8 +804,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             try {
                 android.media.MediaPlayer().apply {
                     setDataSource(cell.audioPath)
-                    prepare(); start()
-                    setOnCompletionListener { release() }
+                    setOnPreparedListener { it.start() }
+                    setOnCompletionListener { it.release() }
+                    setOnErrorListener { player, _, _ -> player.release(); speakText(cell.textToSpeak, pitch, rate); true }
+                    prepareAsync() // La lecture du fichier ne bloque pas l'interface
                 }
             } catch (e: Exception) {
                 speakText(cell.textToSpeak, pitch, rate)
@@ -814,14 +817,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun trackWordUsage(cell: AACCell, context: Context, onUpdate: (Map<String, Int>) -> Unit) {
-        if (!cell.isFolder) {
-            val stats = loadStats(context).toMutableMap()
-            stats[cell.label] = (stats[cell.label] ?: 0) + 1
-            saveStats(context, stats)
-            onUpdate(stats)
-            logUsage(UsageType.WORD, cell.label)
-        }
+    // Statistiques en mémoire : lues une fois, puis mises à jour et enregistrées à chaque mot (sans relire le JSON)
+    private var statsCache: MutableMap<String, Int>? = null
+
+    private fun trackWordUsage(cell: AACCell) {
+        if (cell.isFolder) return
+        val stats = statsCache ?: loadStats(this).toMutableMap().also { statsCache = it }
+        stats[cell.label] = (stats[cell.label] ?: 0) + 1
+        saveStats(this, stats)
+        logUsage(UsageType.WORD, cell.label)
     }
 
     /** Ajoute une ligne datée au journal d'utilisation, sans bloquer l'interface. */
