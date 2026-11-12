@@ -53,7 +53,7 @@ import java.util.Locale
 
 /**
  * Liste des sauvegardes automatiques (une par jour, 7 jours) avec un bouton pour revenir à l'une d'elles.
- * Restaurer demande une confirmation ; la disposition actuelle reste récupérable (⋮ › Revenir à la disposition précédente).
+ * Restaurer demande une confirmation ; la disposition actuelle reste récupérable (Disposition › Revenir à la disposition précédente).
  */
 @Composable
 fun AutoBackupDialog(onDismiss: () -> Unit, onRestore: (NinaBackup) -> Unit) {
@@ -148,7 +148,7 @@ fun VocabularyPackDialog(currentColumns: Int, onDismiss: () -> Unit, onApply: (V
                         }
                         Text(
                             "Les grilles remplacent tous les pictos actuels. La disposition actuelle est gardée : " +
-                            "⋮ › « Revenir à la disposition précédente » la remet en place.",
+                            "Disposition › « Revenir à la disposition précédente » la remet en place.",
                             fontSize = 12.sp, color = Color.Gray
                         )
                     }

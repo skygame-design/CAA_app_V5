@@ -14,6 +14,7 @@ android {
         targetSdk = 35
         versionCode = 2
         versionName = "1.1"
+        manifestPlaceholders["appLabel"] = "Nina"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -34,17 +35,39 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // Clé de l'appli de test (variante « essai ») : enregistrée dans le dépôt, pour que l'appli de test compilée
+        // n'importe où (ordinateur, session cloud) se mette à jour sans désinstaller. Elle ne sert qu'à l'appli de test.
+        create("essai") {
+            storeFile = file("essai.keystore")
+            storePassword = "nina-essai"
+            keyAlias = "essai"
+            keyPassword = "nina-essai"
+        }
     }
 
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("tablette")
-            // Pas de réduction du code (R8) pour l'instant : elle peut casser la lecture des données enregistrées (Gson)
-            isMinifyEnabled = false
+            // Réduction du code (R8) : le code inutilisé des bibliothèques (milliers d'icônes, réseau…) est retiré,
+            // l'application est deux fois plus petite et démarre plus vite. Les classes lues et écrites en JSON (Gson)
+            // sont marquées @Keep dans le code, et proguard-rules.pro garde ce que la détection du visage appelle par réflexion.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        // Appli de test « Nina (test) » : s'installe à côté de la vraie Nina sans la toucher (autre identifiant,
+        // donc ses propres grilles, photos, calibration et réglages). Compilation : ./gradlew assembleEssai
+        // Construite comme la version finale (code réduit, non débogable) : ce qu'on teste est ce qu'on livrera.
+        create("essai") {
+            initWith(getByName("release"))
+            matchingFallbacks += "release"
+            applicationIdSuffix = ".essai"
+            versionNameSuffix = "-test"
+            manifestPlaceholders["appLabel"] = "Nina (test)"
+            signingConfig = signingConfigs.getByName("essai")
         }
     }
 

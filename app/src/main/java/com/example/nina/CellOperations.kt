@@ -13,7 +13,8 @@ import android.content.Context
  * 2. toute image encore sur le web est téléchargée dans la tablette (fichier nommé d'après l'id du picto).
  * En cas d'échec (pas de réseau), l'adresse web est gardée et on réessaiera au prochain démarrage.
  */
-internal suspend fun updateCellsWithImages(context: Context, vararg lists: MutableList<AACCell>) {
+internal suspend fun updateCellsWithImages(context: Context, vararg lists: MutableList<AACCell>): Boolean {
+    var changed = false
     lists.forEach { list ->
         list.forEachIndexed { i, original ->
             var cell = original
@@ -41,10 +42,11 @@ internal suspend fun updateCellsWithImages(context: Context, vararg lists: Mutab
                     }
                 } catch (_: Exception) {} // Pas de réseau : on réessaiera au prochain démarrage
             }
-            if (cell !== original && i < list.size && list[i].id == original.id) list[i] = cell
-            if (cell.isFolder) updateCellsWithImages(context, cell.content)
+            if (cell !== original && i < list.size && list[i].id == original.id) { list[i] = cell; changed = true }
+            if (cell.isFolder && updateCellsWithImages(context, cell.content)) changed = true
         }
     }
+    return changed // Vrai si au moins un picto a été modifié (il faut alors enregistrer)
 }
 
 /** Image actuelle du picto (avant modification), pour savoir si l'utilisateur l'a changée. */

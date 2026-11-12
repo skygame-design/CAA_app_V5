@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -82,20 +83,24 @@ fun HoldLockButton(isAdminMode: Boolean, onHoldComplete: () -> Unit, onLock: () 
 }
 
 /**
- * Barre du mode adulte, en haut de l'écran : tous les outils au même endroit,
- * sans pousser les phrases rapides de la colonne de droite.
+ * Barre du mode adulte, en haut de l'écran, rangée en groupes :
+ * [Mode adulte] | Ajouter · Édition · Disposition ▾ | Jeux | … | Réglages ▾ · Aide · Verrouiller.
+ * Les actions fréquentes sont visibles ; le reste est dans deux menus :
+ * Disposition (taille de la grille, colonnes, grilles prêtes) et Réglages (paramètres, outils, sauvegardes).
  */
 @Composable
 fun AdminToolbar(
-    showMore: Boolean, onMoreToggle: (Boolean) -> Unit,
+    showMore: Boolean, onMoreToggle: (Boolean) -> Unit, // Menu Réglages ouvert
     isEditMode: Boolean, onEditModeToggle: (Boolean) -> Unit,
     columnCount: Int, onColumnCountChange: (Int) -> Unit,
+    sideColumnsHidden: Boolean, onSideColumnsToggle: () -> Unit,
     onAddToGrid: () -> Unit, onAddToLeft: () -> Unit, onAddToQuick: () -> Unit, onSettings: () -> Unit, onStats: () -> Unit, onHelp: () -> Unit,
     onCalibration: () -> Unit, isKioskMode: Boolean, onKioskToggle: () -> Unit,
     onBackup: () -> Unit, onRestore: () -> Unit,
     onRecommendedLayout: () -> Unit, onRestorePreviousLayout: (() -> Unit)?, // null : rien à restaurer
     onAutoBackups: () -> Unit,
     onEyeGaze: () -> Unit,
+    onGames: () -> Unit,
     onPrintBoard: () -> Unit,
     voiceWarning: String?, onVoiceFix: () -> Unit, // null : la voix fonctionne hors ligne
     onLock: () -> Unit,
@@ -111,7 +116,7 @@ fun AdminToolbar(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Icon(Icons.Default.LockOpen, contentDescription = null, tint = Color(0xFF8D6E00))
-        Text("Mode adulte", fontWeight = FontWeight.Bold, color = Color(0xFF5D4600), modifier = Modifier.padding(end = 8.dp))
+        Text("Mode adulte", fontWeight = FontWeight.Bold, color = Color(0xFF5D4600))
         // Problème de voix : bouton orange bien visible pour l'adulte, qui explique comment installer la voix
         voiceWarning?.let { message ->
             Button(
@@ -125,57 +130,94 @@ fun AdminToolbar(
             }
         }
 
+        ToolbarSeparator()
+
+        // --- Groupe « grille » : ajouter, modifier, disposition ---
         // Ajouter : on choisit la zone (les colonnes n'ont pas de case « + » pour ne pas changer de disposition)
         Box {
             var showAddMenu by remember { mutableStateOf(false) }
             AdminToolButton(Icons.Default.Add, "Ajouter", { showAddMenu = true })
             DropdownMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
-                DropdownMenuItem(text = { Text("Dans la grille (dossier ouvert)") }, onClick = { showAddMenu = false; onAddToGrid() })
-                DropdownMenuItem(text = { Text("Dans la colonne de gauche (dossiers)") }, onClick = { showAddMenu = false; onAddToLeft() })
-                DropdownMenuItem(text = { Text("Dans les phrases rapides") }, onClick = { showAddMenu = false; onAddToQuick() })
+                DropdownMenuItem(text = { Text("Dans la grille (dossier ouvert)") }, leadingIcon = { Icon(Icons.Default.GridView, null) }, onClick = { showAddMenu = false; onAddToGrid() })
+                DropdownMenuItem(text = { Text("Dans la colonne de gauche (dossiers)") }, leadingIcon = { Icon(Icons.Default.Folder, null) }, onClick = { showAddMenu = false; onAddToLeft() })
+                DropdownMenuItem(text = { Text("Dans les phrases rapides") }, leadingIcon = { Icon(Icons.Default.Bolt, null) }, onClick = { showAddMenu = false; onAddToQuick() })
             }
         }
         AdminToolButton(Icons.Default.Edit, if (isEditMode) "Édition : oui" else "Édition", { onEditModeToggle(!isEditMode) }, selected = isEditMode)
-        AdminToolButton(Icons.Default.Settings, "Paramètres", onSettings)
-        AdminToolButton(Icons.Default.BarChart, "Statistiques", onStats)
-        AdminToolButton(Icons.AutoMirrored.Filled.Help, "Aide", onHelp)
-
-        // Taille de la grille : pictos par rangée (1 à 8)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.background(Color.White, RoundedCornerShape(20.dp)).padding(horizontal = 4.dp)
-        ) {
-            IconButton(onClick = { if (columnCount > 1) onColumnCountChange(columnCount - 1) }, enabled = columnCount > 1) {
-                Icon(Icons.Default.Remove, contentDescription = "Moins de pictos par rangée")
-            }
-            Text("$columnCount par rangée", fontWeight = FontWeight.Bold, color = accent)
-            IconButton(onClick = { if (columnCount < 8) onColumnCountChange(columnCount + 1) }, enabled = columnCount < 8) {
-                Icon(Icons.Default.Add, contentDescription = "Plus de pictos par rangée")
-            }
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Outils plus rares
+        // Disposition : taille de la grille, colonnes latérales, grilles prêtes (le menu reste ouvert pendant les réglages)
         Box {
-            IconButton(onClick = { onMoreToggle(true) }) { Icon(Icons.Default.MoreVert, contentDescription = "Plus d'outils") }
-            DropdownMenu(expanded = showMore, onDismissRequest = { onMoreToggle(false) }) {
-                DropdownMenuItem(text = { Text("👁 Commande oculaire…") }, onClick = { onMoreToggle(false); onEyeGaze() })
-                DropdownMenuItem(text = { Text("🎯 Calibrer le tactile") }, onClick = { onMoreToggle(false); onCalibration() })
-                DropdownMenuItem(text = { Text(if (isKioskMode) "🔓 Désactiver le mode Kiosque" else "🔒 Activer le mode Kiosque") }, onClick = { onMoreToggle(false); onKioskToggle() })
+            var showLayoutMenu by remember { mutableStateOf(false) }
+            AdminToolButton(Icons.Default.Dashboard, "Disposition", { showLayoutMenu = true }, dropdown = true)
+            DropdownMenu(expanded = showLayoutMenu, onDismissRequest = { showLayoutMenu = false }) {
+                MenuSection("Grille")
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp)) {
+                    Text("Pictos par rangée", modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp))
+                    IconButton(onClick = { if (columnCount > 1) onColumnCountChange(columnCount - 1) }, enabled = columnCount > 1) {
+                        Icon(Icons.Default.Remove, contentDescription = "Moins de pictos par rangée")
+                    }
+                    Text("$columnCount", fontWeight = FontWeight.Bold, color = accent, fontSize = 18.sp)
+                    IconButton(onClick = { if (columnCount < 8) onColumnCountChange(columnCount + 1) }, enabled = columnCount < 8) {
+                        Icon(Icons.Default.Add, contentDescription = "Plus de pictos par rangée")
+                    }
+                }
+                // Colonnes latérales (dossiers, phrases rapides) : masquées, la grille seule occupe l'écran
+                DropdownMenuItem(
+                    text = { Text("Colonnes de gauche et de droite") },
+                    leadingIcon = { Icon(Icons.Default.ViewColumn, null) },
+                    trailingIcon = { Switch(checked = !sideColumnsHidden, onCheckedChange = { onSideColumnsToggle() }) },
+                    onClick = onSideColumnsToggle
+                )
                 HorizontalDivider()
-                DropdownMenuItem(text = { Text("📤 Partager / Sauvegarder") }, onClick = { onMoreToggle(false); onBackup() })
-                DropdownMenuItem(text = { Text(stringResource(R.string.btn_restore)) }, onClick = { onMoreToggle(false); onRestore() })
-                HorizontalDivider()
-                DropdownMenuItem(text = { Text("🗂 Sauvegardes automatiques…") }, onClick = { onMoreToggle(false); onAutoBackups() })
-                DropdownMenuItem(text = { Text("🧩 Grilles prêtes…") }, onClick = { onMoreToggle(false); onRecommendedLayout() })
-                DropdownMenuItem(text = { Text("🖨 Planche imprimable…") }, onClick = { onMoreToggle(false); onPrintBoard() })
+                MenuSection("Grilles")
+                DropdownMenuItem(text = { Text("Grilles prêtes…") }, leadingIcon = { Icon(Icons.Default.Extension, null) }, onClick = { showLayoutMenu = false; onRecommendedLayout() })
                 onRestorePreviousLayout?.let { restore ->
-                    DropdownMenuItem(text = { Text("↩ Revenir à la disposition précédente") }, onClick = { onMoreToggle(false); restore() })
+                    DropdownMenuItem(text = { Text("Revenir à la disposition précédente") }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.Undo, null) }, onClick = { showLayoutMenu = false; restore() })
                 }
             }
         }
 
+        ToolbarSeparator()
+
+        // --- Pour l'enfant ---
+        Button(
+            onClick = onGames,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7E57C2)),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+        ) {
+            Icon(Icons.Default.SportsEsports, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Jeux")
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        // --- Réglages et outils plus rares ---
+        Box {
+            AdminToolButton(Icons.Default.Settings, "Réglages", { onMoreToggle(true) }, dropdown = true)
+            DropdownMenu(expanded = showMore, onDismissRequest = { onMoreToggle(false) }) {
+                MenuSection("Réglages")
+                DropdownMenuItem(text = { Text("Paramètres (couleurs, voix, tactile)") }, leadingIcon = { Icon(Icons.Default.Tune, null) }, onClick = { onMoreToggle(false); onSettings() })
+                DropdownMenuItem(text = { Text("Commande oculaire…") }, leadingIcon = { Icon(Icons.Default.Visibility, null) }, onClick = { onMoreToggle(false); onEyeGaze() })
+                DropdownMenuItem(text = { Text("Calibrer le tactile") }, leadingIcon = { Icon(Icons.Default.TouchApp, null) }, onClick = { onMoreToggle(false); onCalibration() })
+                DropdownMenuItem(
+                    text = { Text(if (isKioskMode) "Désactiver le mode Kiosque" else "Activer le mode Kiosque") },
+                    leadingIcon = { Icon(if (isKioskMode) Icons.Default.LockOpen else Icons.Default.Lock, null) },
+                    onClick = { onMoreToggle(false); onKioskToggle() }
+                )
+                HorizontalDivider()
+                MenuSection("Suivi")
+                DropdownMenuItem(text = { Text("Statistiques") }, leadingIcon = { Icon(Icons.Default.BarChart, null) }, onClick = { onMoreToggle(false); onStats() })
+                DropdownMenuItem(text = { Text("Planche imprimable…") }, leadingIcon = { Icon(Icons.Default.Print, null) }, onClick = { onMoreToggle(false); onPrintBoard() })
+                HorizontalDivider()
+                MenuSection("Sauvegarde")
+                DropdownMenuItem(text = { Text("Partager / Sauvegarder") }, leadingIcon = { Icon(Icons.Default.Share, null) }, onClick = { onMoreToggle(false); onBackup() })
+                DropdownMenuItem(text = { Text(stringResource(R.string.btn_restore)) }, leadingIcon = { Icon(Icons.Default.Restore, null) }, onClick = { onMoreToggle(false); onRestore() })
+                DropdownMenuItem(text = { Text("Sauvegardes automatiques…") }, leadingIcon = { Icon(Icons.Default.History, null) }, onClick = { onMoreToggle(false); onAutoBackups() })
+            }
+        }
+        IconButton(onClick = onHelp) {
+            Icon(Icons.AutoMirrored.Filled.Help, contentDescription = "Aide", tint = accent)
+        }
         Button(onClick = onLock, colors = ButtonDefaults.buttonColors(containerColor = accent)) {
             Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
@@ -184,8 +226,26 @@ fun AdminToolbar(
     }
 }
 
+/** Trait vertical entre deux groupes de la barre. */
 @Composable
-private fun AdminToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, selected: Boolean = false) {
+private fun ToolbarSeparator() {
+    Box(modifier = Modifier.padding(horizontal = 4.dp).width(1.dp).height(28.dp).background(Color(0xFFBFA75A)))
+}
+
+/** Titre de section dans un menu déroulant. */
+@Composable
+private fun MenuSection(title: String) {
+    Text(
+        title.uppercase(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Gray,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
+    )
+}
+
+@Composable
+private fun AdminToolButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit,
+    selected: Boolean = false, dropdown: Boolean = false // dropdown : ouvre un menu (petite flèche ▾)
+) {
     FilledTonalButton(
         onClick = onClick,
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
@@ -194,6 +254,7 @@ private fun AdminToolButton(icon: androidx.compose.ui.graphics.vector.ImageVecto
         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(6.dp))
         Text(label)
+        if (dropdown) Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp))
     }
 }
 

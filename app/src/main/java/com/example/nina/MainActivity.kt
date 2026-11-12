@@ -141,11 +141,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     var voiceRate by remember { mutableFloatStateOf(context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).getFloat("voice_rate", 0.85f)) }
                     var debounceTime by remember { mutableLongStateOf(context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).getLong("debounce_time", 500L)) }
                     var autoReturnHome by remember { mutableStateOf(context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).getBoolean("auto_return_home", true)) }
+                    // Colonnes latérales masquées : la grille seule occupe l'écran (voir SideColumns)
+                    var sideColumnsHidden by remember { mutableStateOf(context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).getBoolean(SideColumns.PREF_KEY, false)) }
 
                     var isKioskMode by remember { mutableStateOf(false) }
                     val activity = context as? android.app.Activity
 
-                    var usageStats by remember { mutableStateOf(loadStats(context)) }
+                    // Statistiques d'utilisation, lues seulement quand la fenêtre s'ouvre : un toucher ne recompose pas tout l'écran
+                    var usageStats by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
 
                     // Modélisation : cases à toucher dans l'ordre pour atteindre un mot (dossiers puis mot)
                     var guideSteps by remember { mutableStateOf<List<AACCell>>(emptyList()) }
@@ -171,10 +174,16 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         }
                     }
                     var showStatsDialog by remember { mutableStateOf(false) }
+                    // Jeux : fenêtre de lancement (mode adulte) et séance en cours (null : écran principal)
+                    var showGamesLaunch by remember { mutableStateOf(false) }
+                    var gamesSession by remember { mutableStateOf<GamesSession?>(null) }
 
                     // Détermine les boutons à afficher selon si on est dans un dossier ou non
                     val currentButtons = if (navigationStack.isEmpty()) boutons else navigationStack.last().content
                     val stackSize = navigationStack.size
+
+                    // Colonnes réellement masquées : elles réapparaissent le temps d'un guidage qui passe par elles
+                    val columnsHiddenOnScreen = SideColumns.hiddenOnScreen(sideColumnsHidden, guideSteps, coreWords, quickFires)
 
                     var sidebarRect by remember { mutableStateOf(value = Rect.Zero) }
                     var quickFiresRect by remember { mutableStateOf(value = Rect.Zero) }
@@ -203,12 +212,20 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     var rightLayout by remember { mutableStateOf(GridLayout(1, 1, 1)) }
                     var rightPreviousRect by remember { mutableStateOf(Rect.Zero) }
                     var rightNextRect by remember { mutableStateOf(Rect.Zero) }
+                    // Colonnes masquées : on oublie leurs zones, pour qu'un glisser-déposer n'y dépose ni n'y tourne de page
+                    LaunchedEffect(columnsHiddenOnScreen) {
+                        if (columnsHiddenOnScreen) {
+                            sidebarRect = Rect.Zero; quickFiresRect = Rect.Zero
+                            leftPreviousRect = Rect.Zero; leftNextRect = Rect.Zero
+                            rightPreviousRect = Rect.Zero; rightNextRect = Rect.Zero
+                        }
+                    }
 
                     // Cherche les images des pictos marqués "FETCH" et télécharge dans la tablette celles encore sur le web,
                     // puis enregistre : les pictos restent visibles hors réseau
                     suspend fun fetchAndSaveImages() {
-                        withContext(Dispatchers.IO) { updateCellsWithImages(context, boutons, coreWords, quickFires) }
-                        storage.saveAll(boutons, coreWords, quickFires)
+                        val changed = withContext(Dispatchers.IO) { updateCellsWithImages(context, boutons, coreWords, quickFires) }
+                        if (changed) storage.saveAll(boutons, coreWords, quickFires)
                     }
 
                     // Grilles prêtes : sauvegarde de l'ancienne disposition pour pouvoir revenir en arrière
@@ -332,201 +349,227 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                 transformOrigin = TransformOrigin(gaze.zoom.originX, gaze.zoom.originY)
                             }
                             .safeDrawingPadding()) {
-                        // --- BARRE DU MODE ADULTE (visible seulement cadenas ouvert, hors de la zone de l'enfant) ---
-                        if (isAdminMode) {
-                            AdminToolbar(
-                                showMore = showMenu,
-                                onMoreToggle = { showMenu = it },
-                                isEditMode = isEditMode,
-                                onEditModeToggle = { isEditMode = it },
-                                columnCount = columnCount,
-                                onColumnCountChange = {
-                                    columnCount = it
-                                    context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).edit().putInt("column_count", it).apply()
-                                },
-                                onAddToGrid = { showAddDialog = true },
-                                onAddToLeft = { isAddingToCore = true; showAddDialog = true },
-                                onAddToQuick = { isAddingToQuickFires = true; showAddDialog = true },
-                                onSettings = { showSettingsDialog = true },
-                                onStats = { showStatsDialog = true },
-                                onHelp = { showHelpDialog = true },
-                                onCalibration = { showCalibration = true },
-                                isKioskMode = isKioskMode,
-                                onKioskToggle = {
-                                    activity?.let { act ->
-                                        if (isKioskMode) { act.stopLockTask(); isKioskMode = false }
-                                        else { act.startLockTask(); isKioskMode = true }
-                                    }
-                                },
-                                onBackup = { storage.shareBackupFile(NinaBackup(boutons, coreWords, quickFires)) },
-                                onRestore = { openDocLauncher.launch(arrayOf("application/json")) },
-                                onRecommendedLayout = { showRecommendedDialog = true },
-                                onAutoBackups = { showAutoBackups = true },
-                                onEyeGaze = { gaze.showDialog = true },
-                                onPrintBoard = { showPrintBoard = true },
-                                voiceWarning = when (voiceStatus) {
-                                    VoiceStatus.NETWORK_ONLY -> "Voix française seulement avec internet"
-                                    VoiceStatus.MISSING -> "Voix française absente"
-                                    else -> null
-                                },
-                                onVoiceFix = { showVoiceHelp = true },
-                                onRestorePreviousLayout = if (!hasPreviousLayout) null else ({
-                                    prefs.getString("layout_before_recommended", null)?.let { json ->
-                                        try { applyLayout(parseBackup(json)) } catch (e: Exception) { Log.e("Nina-Debug", "Ancienne disposition illisible", e) }
-                                    }
-                                    prefs.edit().remove("layout_before_recommended").apply()
-                                    hasPreviousLayout = false
-                                }),
-                                onLock = { isAdminMode = false; isEditMode = false }, // On coupe l'édition au verrouillage
-                                modifier = Modifier.zIndex(1f) // Par-dessus la barre de phrase : la grille ne change pas de taille
+                        // --- JEUX : moment de détente lancé par l'adulte (remplace l'écran principal) ---
+                        val session = gamesSession
+                        if (session != null) {
+                            GamesScreen(
+                                session = session,
+                                pictos = remember(session) { playablePictos(boutons + coreWords + quickFires) },
+                                settings = remember(session) { GamesSettings.load(prefs) },
+                                isCviMode = isCviMode,
+                                speak = { speakText(it, voicePitch, voiceRate) },
+                                onExit = { gamesSession = null }
                             )
-                        }
-                        // Ce qu'il faut pour afficher les cases, et ce que fait un toucher (ou une fixation du regard) dans chaque zone
-                        val cellUi = CellUi(haptic, debounceTime, isAdminMode, isEditMode, isCviMode, guidedId, dndState)
-                        val editCell: (AACCell) -> Unit = { cell -> cellToEdit = cell; showEditDialog = true }
-                        val onFolderColumnClick: (AACCell) -> Unit = { cell ->
-                            if (isEditMode) editCell(cell)
-                            else if (cell.isFolder) {
-                                // Un dossier de la colonne s'ouvre depuis n'importe où
-                                playCellAudio(cell, voicePitch, voiceRate)
-                                advanceGuide(cell)
-                                navigationStack.clear()
-                                navigationStack.add(cell)
-                            } else {
-                                playCellAudio(cell, voicePitch, voiceRate)
-                                trackWordUsage(cell, context, { usageStats = it }); advanceGuide(cell)
-                                if (!cell.isQuickPhrase) phrase.add(cell)
-                            }
-                        }
-                        val onGridClick: (AACCell) -> Unit = { cell ->
-                            if (isEditMode) editCell(cell)
-                            else {
-                                playCellAudio(cell, voicePitch, voiceRate)
-                                trackWordUsage(cell, context, { usageStats = it }); advanceGuide(cell)
-                                if (cell.isFolder) navigationStack.add(cell)
-                                else {
-                                    if (!cell.isQuickPhrase) phrase.add(cell)
-                                    // Après le choix d'un mot dans un dossier, on revient à l'accueil (comme TD Snap / Grid 3)
-                                    if (autoReturnHome) navigationStack.clear()
-                                }
-                            }
-                        }
-                        val onQuickPhraseClick: (AACCell) -> Unit = { cell ->
-                            if (isEditMode) editCell(cell)
-                            else {
-                                playCellAudio(cell, voicePitch, voiceRate)
-                                trackWordUsage(cell, context, { usageStats = it }); advanceGuide(cell)
-                            }
-                        }
-                        // Regard : cases plus hautes et plus espacées dans les colonnes
-                        val sideItemHeight = if (gaze.gridOn) 130.dp else 80.dp
-                        val sideGap = if (gaze.gridOn) 24.dp else 12.dp
-                        val speakButton: (String) -> Unit = { speakText(it, voicePitch, voiceRate) }
-
-                        Row(modifier = Modifier.fillMaxSize()) {
-
-                            // 1. COLONNE PRINCIPALE (Barre supérieure + Grille)
-                            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                                // Lit la phrase construite (bouton Play ou appui sur la barre)
-                                val speakSentence = {
-                                    if (phrase.isNotEmpty()) {
-                                        val texteBrut = phrase.joinToString(" ") { it.label }
-                                        val texteFinal = LocalGrammarEngine.refine(texteBrut)
-                                        speakText(texteFinal, voicePitch, voiceRate)
-                                        logUsage(UsageType.SENTENCE, texteFinal)
-                                    }
-                                }
-                                TopBar(
-                                    phrase = phrase, haptic = haptic, isMuted = mediaMuted,
-                                    onSpeak = speakSentence, onMutedClick = { showVolumePanel(context) },
-                                    onWordFinder = { showWordFinder = true }, onKeyboard = { showKeyboardDialog = true },
-                                    showBack = navigationStack.size > 1,
-                                    onBack = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        speakText("Retour", voicePitch, voiceRate)
-                                        if (navigationStack.isNotEmpty()) navigationStack.removeAt(navigationStack.size - 1)
-                                    }
+                        } else {
+                            // --- BARRE DU MODE ADULTE (visible seulement cadenas ouvert, hors de la zone de l'enfant) ---
+                            if (isAdminMode) {
+                                AdminToolbar(
+                                    showMore = showMenu,
+                                    onMoreToggle = { showMenu = it },
+                                    isEditMode = isEditMode,
+                                    onEditModeToggle = { isEditMode = it },
+                                    columnCount = columnCount,
+                                    onColumnCountChange = {
+                                        columnCount = it
+                                        context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).edit().putInt("column_count", it).apply()
+                                    },
+                                    sideColumnsHidden = sideColumnsHidden,
+                                    onSideColumnsToggle = {
+                                        sideColumnsHidden = !sideColumnsHidden
+                                        context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).edit().putBoolean(SideColumns.PREF_KEY, sideColumnsHidden).apply()
+                                    },
+                                    onAddToGrid = { showAddDialog = true },
+                                    onAddToLeft = { isAddingToCore = true; showAddDialog = true },
+                                    onAddToQuick = { isAddingToQuickFires = true; showAddDialog = true },
+                                    onSettings = { showSettingsDialog = true },
+                                    onStats = { usageStats = loadStats(context); showStatsDialog = true },
+                                    onHelp = { showHelpDialog = true },
+                                    onCalibration = { showCalibration = true },
+                                    isKioskMode = isKioskMode,
+                                    onKioskToggle = {
+                                        activity?.let { act ->
+                                            if (isKioskMode) { act.stopLockTask(); isKioskMode = false }
+                                            else { act.startLockTask(); isKioskMode = true }
+                                        }
+                                    },
+                                    onBackup = { storage.shareBackupFile(NinaBackup(boutons, coreWords, quickFires)) },
+                                    onRestore = { openDocLauncher.launch(arrayOf("application/json")) },
+                                    onRecommendedLayout = { showRecommendedDialog = true },
+                                    onAutoBackups = { showAutoBackups = true },
+                                    onEyeGaze = { gaze.showDialog = true },
+                                    onGames = { showGamesLaunch = true },
+                                    onPrintBoard = { showPrintBoard = true },
+                                    voiceWarning = when (voiceStatus) {
+                                        VoiceStatus.NETWORK_ONLY -> "Voix française seulement avec internet"
+                                        VoiceStatus.MISSING -> "Voix française absente"
+                                        else -> null
+                                    },
+                                    onVoiceFix = { showVoiceHelp = true },
+                                    onRestorePreviousLayout = if (!hasPreviousLayout) null else ({
+                                        prefs.getString("layout_before_recommended", null)?.let { json ->
+                                            try { applyLayout(parseBackup(json)) } catch (e: Exception) { Log.e("Nina-Debug", "Ancienne disposition illisible", e) }
+                                        }
+                                        prefs.edit().remove("layout_before_recommended").apply()
+                                        hasPreviousLayout = false
+                                    }),
+                                    onLock = { isAdminMode = false; isEditMode = false }, // On coupe l'édition au verrouillage
+                                    modifier = Modifier.zIndex(1f) // Par-dessus la barre de phrase : la grille ne change pas de taille
                                 )
-
-                                // --- BANDEAU DE MODÉLISATION ---
-                                if (guideTarget != null) {
-                                    GuideBanner(guideTarget.label, guideStep, guideSteps.size, onStop = { guideSteps = emptyList(); guideStep = 0 })
+                            }
+                            // Ce qu'il faut pour afficher les cases, et ce que fait un toucher (ou une fixation du regard) dans chaque zone
+                            val cellUi = CellUi(haptic, debounceTime, isAdminMode, isEditMode, isCviMode, guidedId, dndState)
+                            val editCell: (AACCell) -> Unit = { cell -> cellToEdit = cell; showEditDialog = true }
+                            val onFolderColumnClick: (AACCell) -> Unit = { cell ->
+                                if (isEditMode) editCell(cell)
+                                else if (cell.isFolder) {
+                                    // Un dossier de la colonne s'ouvre depuis n'importe où
+                                    playCellAudio(cell, voicePitch, voiceRate)
+                                    advanceGuide(cell)
+                                    navigationStack.clear()
+                                    navigationStack.add(cell)
+                                } else {
+                                    playCellAudio(cell, voicePitch, voiceRate)
+                                    trackWordUsage(cell); advanceGuide(cell)
+                                    if (!cell.isQuickPhrase) phrase.add(cell)
                                 }
-
-                                // Ouvre la page où se trouve la case à toucher (grille ou colonnes)
-                                LaunchedEffect(guidedId, stackSize, gridLayout.perPage, leftLayout.perPage, rightLayout.perPage) {
-                                    val index = currentButtons.indexOfFirst { it.id == guidedId }
-                                    if (index >= 0) gridPage = index / gridLayout.perPage
-                                    val leftIndex = coreWords.indexOfFirst { it.id == guidedId }
-                                    if (leftIndex >= 0) leftPage = leftIndex / leftLayout.perPage
-                                    val rightIndex = quickFires.indexOfFirst { it.id == guidedId }
-                                    if (rightIndex >= 0) rightPage = rightIndex / rightLayout.perPage
-                                }
-
-                                // --- ZONE DE CONTENU PRINCIPALE ---
-                                Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                                    // A. COLONNE DE GAUCHE : 🏠 Accueil puis les dossiers
-                                    FolderColumn(
-                                        cells = coreWords, openFolderId = navigationStack.firstOrNull()?.id, isHome = navigationStack.isEmpty(),
-                                        ui = cellUi,
-                                        paging = PagingUi(leftPage, { leftPage = it }, { if (it != leftLayout) leftLayout = it }, { previous, next -> leftPreviousRect = previous; leftNextRect = next }),
-                                        minItemHeight = sideItemHeight, gap = sideGap, onSpeak = speakButton, cellBounds = leftCellsBounds,
-                                        onHome = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            speakText("Accueil", voicePitch, voiceRate)
-                                            navigationStack.clear()
-                                            gridPage = 0 // Retour à la première page, même si l'on était déjà à l'accueil
-                                        },
-                                        onCellClick = onFolderColumnClick,
-                                        onCellLongPress = { openWordForms(it, false) }, // false : picto de la colonne
-                                        modifier = Modifier
-                                            .width(120.dp)
-                                            .fillMaxHeight()
-                                            .padding(bottom = 16.dp)
-                                            .onGloballyPositioned { sidebarRect = it.boundsInRoot() }
-                                    )
-
-                                    // Séparateur
-                                    Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp, vertical = 8.dp).width(2.dp).background(Color.LightGray.copy(alpha = 0.5f)))
-
-                                    // B. GRILLE CENTRALE (Dossiers et Vocabulaire)
-                                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                                        CenterGrid(
-                                            cells = currentButtons,
-                                            // Regard : moins de pictos par rangée et de grands espaces entre les cases
-                                            columns = if (gaze.gridOn) minOf(columnCount, gaze.gridColumns) else columnCount,
-                                            gap = if (gaze.gridOn) 40.dp else 16.dp,
-                                            ui = cellUi,
-                                            paging = PagingUi(gridPage, { gridPage = it }, { if (it != gridLayout) gridLayout = it }, { previous, next -> previousPageRect = previous; nextPageRect = next }),
-                                            onSpeak = speakButton, cellBounds = gridCellsBounds,
-                                            onCellClick = onGridClick,
-                                            onCellLongPress = { openWordForms(it, true) }, // true : picto de la grille
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .padding(bottom = 16.dp)
-                                                .onGloballyPositioned { gridRect = it.boundsInRoot() }
-                                        )
+                            }
+                            val onGridClick: (AACCell) -> Unit = { cell ->
+                                if (isEditMode) editCell(cell)
+                                else {
+                                    playCellAudio(cell, voicePitch, voiceRate)
+                                    trackWordUsage(cell); advanceGuide(cell)
+                                    if (cell.isFolder) navigationStack.add(cell)
+                                    else {
+                                        if (!cell.isQuickPhrase) phrase.add(cell)
+                                        // Après le choix d'un mot dans un dossier, on revient à l'accueil (comme TD Snap / Grid 3)
+                                        if (autoReturnHome) navigationStack.clear()
                                     }
                                 }
                             }
+                            val onQuickPhraseClick: (AACCell) -> Unit = { cell ->
+                                if (isEditMode) editCell(cell)
+                                else {
+                                    playCellAudio(cell, voicePitch, voiceRate)
+                                    trackWordUsage(cell); advanceGuide(cell)
+                                }
+                            }
+                            // Regard : cases plus hautes et plus espacées dans les colonnes
+                            val sideItemHeight = if (gaze.gridOn) 130.dp else 80.dp
+                            val sideGap = if (gaze.gridOn) 24.dp else 12.dp
+                            val speakButton: (String) -> Unit = { speakText(it, voicePitch, voiceRate) }
+                            // Cadenas discret : il faut le maintenir 2 s pour ouvrir le mode adulte.
+                            // En haut de la colonne de droite, ou en haut à droite de l'écran quand les colonnes sont masquées.
+                            val lockButton: @Composable () -> Unit = {
+                                HoldLockButton(
+                                    isAdminMode = isAdminMode,
+                                    onHoldComplete = { showAdminChallengeDialog = true },
+                                    onLock = { isAdminMode = false; isEditMode = false },
+                                    warning = voiceStatus == VoiceStatus.NETWORK_ONLY || voiceStatus == VoiceStatus.MISSING
+                                )
+                            }
 
-                            // 2. COLONNE DE DROITE : cadenas et phrases rapides
-                            QuickPhrasesColumn(
-                                cells = quickFires, ui = cellUi,
-                                paging = PagingUi(rightPage, { rightPage = it }, { if (it != rightLayout) rightLayout = it }, { previous, next -> rightPreviousRect = previous; rightNextRect = next }),
-                                minItemHeight = sideItemHeight, gap = sideGap, onSpeak = speakButton, cellBounds = rightCellsBounds,
-                                lockButton = {
-                                    // Cadenas discret : il faut le maintenir 2 s pour ouvrir le mode adulte
-                                    HoldLockButton(
-                                        isAdminMode = isAdminMode,
-                                        onHoldComplete = { showAdminChallengeDialog = true },
-                                        onLock = { isAdminMode = false; isEditMode = false },
-                                        warning = voiceStatus == VoiceStatus.NETWORK_ONLY || voiceStatus == VoiceStatus.MISSING
+                            Row(modifier = Modifier.fillMaxSize()) {
+
+                                // 1. COLONNE PRINCIPALE (Barre supérieure + Grille)
+                                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                    // Lit la phrase construite (bouton Play ou appui sur la barre)
+                                    val speakSentence = {
+                                        if (phrase.isNotEmpty()) {
+                                            val texteBrut = phrase.joinToString(" ") { it.label }
+                                            val texteFinal = LocalGrammarEngine.refine(texteBrut)
+                                            speakText(texteFinal, voicePitch, voiceRate)
+                                            logUsage(UsageType.SENTENCE, texteFinal)
+                                        }
+                                    }
+                                    TopBar(
+                                        phrase = phrase, haptic = haptic, isMuted = mediaMuted,
+                                        onSpeak = speakSentence, onMutedClick = { showVolumePanel(context) },
+                                        onWordFinder = { showWordFinder = true }, onKeyboard = { showKeyboardDialog = true },
+                                        showBack = SideColumns.showBackButton(navigationStack.size, columnsHiddenOnScreen),
+                                        onBack = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            speakText("Retour", voicePitch, voiceRate)
+                                            if (navigationStack.isNotEmpty()) navigationStack.removeAt(navigationStack.size - 1)
+                                        },
+                                        trailing = if (columnsHiddenOnScreen) lockButton else null
                                     )
-                                },
-                                onCellClick = onQuickPhraseClick,
-                                columnModifier = Modifier.onGloballyPositioned { quickFiresRect = it.boundsInRoot() }
-                            )
+
+                                    // --- BANDEAU DE MODÉLISATION ---
+                                    if (guideTarget != null) {
+                                        GuideBanner(guideTarget.label, guideStep, guideSteps.size, onStop = { guideSteps = emptyList(); guideStep = 0 })
+                                    }
+
+                                    // Ouvre la page où se trouve la case à toucher (grille ou colonnes)
+                                    LaunchedEffect(guidedId, stackSize, gridLayout.perPage, leftLayout.perPage, rightLayout.perPage) {
+                                        val index = currentButtons.indexOfFirst { it.id == guidedId }
+                                        if (index >= 0) gridPage = index / gridLayout.perPage
+                                        val leftIndex = coreWords.indexOfFirst { it.id == guidedId }
+                                        if (leftIndex >= 0) leftPage = leftIndex / leftLayout.perPage
+                                        val rightIndex = quickFires.indexOfFirst { it.id == guidedId }
+                                        if (rightIndex >= 0) rightPage = rightIndex / rightLayout.perPage
+                                    }
+
+                                    // --- ZONE DE CONTENU PRINCIPALE ---
+                                    Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                                        // A. COLONNE DE GAUCHE : 🏠 Accueil puis les dossiers (absente quand les colonnes sont masquées)
+                                        if (!columnsHiddenOnScreen) {
+                                            FolderColumn(
+                                                cells = coreWords, openFolderId = navigationStack.firstOrNull()?.id, isHome = navigationStack.isEmpty(),
+                                                ui = cellUi,
+                                                paging = PagingUi(leftPage, { leftPage = it }, { if (it != leftLayout) leftLayout = it }, { previous, next -> leftPreviousRect = previous; leftNextRect = next }),
+                                                minItemHeight = sideItemHeight, gap = sideGap, onSpeak = speakButton, cellBounds = leftCellsBounds,
+                                                onHome = {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    speakText("Accueil", voicePitch, voiceRate)
+                                                    navigationStack.clear()
+                                                    gridPage = 0 // Retour à la première page, même si l'on était déjà à l'accueil
+                                                },
+                                                onCellClick = onFolderColumnClick,
+                                                onCellLongPress = { openWordForms(it, false) }, // false : picto de la colonne
+                                                modifier = Modifier
+                                                    .width(120.dp)
+                                                    .fillMaxHeight()
+                                                    .padding(bottom = 16.dp)
+                                                    .onGloballyPositioned { sidebarRect = it.boundsInRoot() }
+                                            )
+
+                                            // Séparateur
+                                            Box(modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp, vertical = 8.dp).width(2.dp).background(Color.LightGray.copy(alpha = 0.5f)))
+                                        }
+
+                                        // B. GRILLE CENTRALE (Dossiers et Vocabulaire)
+                                        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                            CenterGrid(
+                                                cells = currentButtons,
+                                                // Regard : moins de pictos par rangée et de grands espaces entre les cases
+                                                columns = if (gaze.gridOn) minOf(columnCount, gaze.gridColumns) else columnCount,
+                                                gap = if (gaze.gridOn) 40.dp else 16.dp,
+                                                ui = cellUi,
+                                                paging = PagingUi(gridPage, { gridPage = it }, { if (it != gridLayout) gridLayout = it }, { previous, next -> previousPageRect = previous; nextPageRect = next }),
+                                                onSpeak = speakButton, cellBounds = gridCellsBounds,
+                                                onCellClick = onGridClick,
+                                                onCellLongPress = { openWordForms(it, true) }, // true : picto de la grille
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(bottom = 16.dp)
+                                                    .onGloballyPositioned { gridRect = it.boundsInRoot() }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // 2. COLONNE DE DROITE : cadenas et phrases rapides (absente quand les colonnes sont masquées)
+                                if (!columnsHiddenOnScreen) {
+                                    QuickPhrasesColumn(
+                                        cells = quickFires, ui = cellUi,
+                                        paging = PagingUi(rightPage, { rightPage = it }, { if (it != rightLayout) rightLayout = it }, { previous, next -> rightPreviousRect = previous; rightNextRect = next }),
+                                        minItemHeight = sideItemHeight, gap = sideGap, onSpeak = speakButton, cellBounds = rightCellsBounds,
+                                        lockButton = lockButton,
+                                        onCellClick = onQuickPhraseClick,
+                                        columnModifier = Modifier.onGloballyPositioned { quickFiresRect = it.boundsInRoot() }
+                                    )
+                                }
+                            }
                         }
                         }
                     }
@@ -539,8 +582,26 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     // Une fenêtre ouverte cache les pictos : pas de sélection par le regard
                     val anyDialogOpen = showAddDialog || showEditDialog || showKeyboardDialog || showAdminChallengeDialog || showSettingsDialog ||
                         showHelpDialog || showCalibration || showWordFinder || showStatsDialog || wordFormsCell != null ||
-                        showRecommendedDialog || showAutoBackups || showVoiceHelp || loadNotice
-                    GazeLayer(gaze, gazeRegistry, isAdminMode, anyDialogOpen)
+                        showRecommendedDialog || showAutoBackups || showVoiceHelp || loadNotice || showGamesLaunch
+                    // Jeux : pas de calibration continue (cibles qui bougent, formes irrégulières)
+                    GazeLayer(gaze, gazeRegistry, isAdminMode, anyDialogOpen, learningAllowed = gamesSession == null)
+
+                    if (showGamesLaunch) {
+                        GamesLaunchDialog(
+                            initialMinutes = prefs.getInt(GAMES_MINUTES_PREF, 10),
+                            settings = GamesSettings.load(prefs),
+                            onSettingsSave = { GamesSettings.save(prefs, it) },
+                            onDismiss = { showGamesLaunch = false },
+                            onLaunch = { minutes ->
+                                prefs.edit().putInt(GAMES_MINUTES_PREF, minutes).apply()
+                                showGamesLaunch = false
+                                // L'enfant joue : le mode adulte se referme (la sélection par le regard y est coupée)
+                                isAdminMode = false; isEditMode = false; showMenu = false
+                                guideSteps = emptyList(); guideStep = 0
+                                gamesSession = GamesSession.start(minutes)
+                            }
+                        )
+                    }
 
                     if (showAutoBackups) {
                         AutoBackupDialog(
@@ -585,7 +646,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                         "La grille enregistrée n'a pas pu être lue. Elle a été récupérée depuis la sauvegarde automatique du " +
                                         "${it.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))}. Les changements faits après cette date sont perdus."
                                     } ?: ("La grille enregistrée n'a pas pu être lue et aucune sauvegarde n'existe : la grille de départ a été installée. " +
-                                         "Si vous avez un fichier de sauvegarde, utilisez ⋮ › Restaurer.")
+                                         "Si vous avez un fichier de sauvegarde, utilisez Réglages › Restaurer.")
                                 )
                             },
                             confirmButton = { Button(onClick = { loadNotice = false }) { Text("Compris") } }
@@ -623,7 +684,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                                 // La forme choisie remplace le mot de base dans la phrase, et c'est elle qui est prononcée
                                 phrase.add(baseCell.copy(id = newCellId(), label = form.text, spokenText = null, audioPath = null))
                                 speakText(form.text, voicePitch, voiceRate)
-                                trackWordUsage(baseCell, context, { usageStats = it }); advanceGuide(baseCell)
+                                trackWordUsage(baseCell); advanceGuide(baseCell)
                                 if (wordFormsFromGrid && autoReturnHome) navigationStack.clear()
                                 wordFormsCell = null
                             },
@@ -667,7 +728,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         },
                         onWordFinderDismiss = { showWordFinder = false },
                         showStats = showStatsDialog, usageStats = usageStats, onStatsDismiss = { showStatsDialog = false }, onStatsReset = {
-                            usageStats = emptyMap(); saveStats(context, emptyMap())
+                            usageStats = emptyMap(); statsCache = mutableMapOf(); saveStats(context, emptyMap())
                             scope.launch(Dispatchers.IO) { UsageLog.clear(context) }
                         },
                         showEditDialog = showEditDialog, cellToEdit = cellToEdit, allButtons = boutons,
@@ -743,8 +804,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             try {
                 android.media.MediaPlayer().apply {
                     setDataSource(cell.audioPath)
-                    prepare(); start()
-                    setOnCompletionListener { release() }
+                    setOnPreparedListener { it.start() }
+                    setOnCompletionListener { it.release() }
+                    setOnErrorListener { player, _, _ -> player.release(); speakText(cell.textToSpeak, pitch, rate); true }
+                    prepareAsync() // La lecture du fichier ne bloque pas l'interface
                 }
             } catch (e: Exception) {
                 speakText(cell.textToSpeak, pitch, rate)
@@ -754,14 +817,15 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun trackWordUsage(cell: AACCell, context: Context, onUpdate: (Map<String, Int>) -> Unit) {
-        if (!cell.isFolder) {
-            val stats = loadStats(context).toMutableMap()
-            stats[cell.label] = (stats[cell.label] ?: 0) + 1
-            saveStats(context, stats)
-            onUpdate(stats)
-            logUsage(UsageType.WORD, cell.label)
-        }
+    // Statistiques en mémoire : lues une fois, puis mises à jour et enregistrées à chaque mot (sans relire le JSON)
+    private var statsCache: MutableMap<String, Int>? = null
+
+    private fun trackWordUsage(cell: AACCell) {
+        if (cell.isFolder) return
+        val stats = statsCache ?: loadStats(this).toMutableMap().also { statsCache = it }
+        stats[cell.label] = (stats[cell.label] ?: 0) + 1
+        saveStats(this, stats)
+        logUsage(UsageType.WORD, cell.label)
     }
 
     /** Ajoute une ligne datée au journal d'utilisation, sans bloquer l'interface. */

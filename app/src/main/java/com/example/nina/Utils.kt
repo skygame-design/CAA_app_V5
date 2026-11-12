@@ -13,6 +13,7 @@ import java.net.URL
 import android.media.MediaRecorder
 import android.os.Build
 import androidx.core.content.edit
+import androidx.annotation.Keep
 
 
 
@@ -119,7 +120,9 @@ fun isRemoteImage(imageUrl: String?) = imageUrl != null && (imageUrl.startsWith(
 /**
  * Contenu complet d'un fichier de sauvegarde : grille, Core Words et Quick Fires.
  * coreWords et quickFires sont null pour les anciennes sauvegardes (grille seule).
+ * @Keep : enregistré en JSON (Gson).
  */
+@Keep
 data class NinaBackup(
     val buttons: List<AACCell>,
     val coreWords: List<AACCell>? = null,
