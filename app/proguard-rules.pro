@@ -12,6 +12,17 @@
 -keep class com.google.protobuf.** { *; }
 -dontwarn com.google.mediapipe.**
 -dontwarn com.google.protobuf.**
+# Ses dépendances qui fonctionnent par réflexion, gardées telles quelles :
+# - Flogger (journal de MediaPipe) retrouve la classe FluentLogger par son nom dans la pile d'appels, et charge
+#   son moteur par Class.forName. Renommée par R8, la détection du visage plantait à la création
+#   (« no caller found on the stack »).
+# - Le module de télémétrie de Google (datatransport, encodeurs Firebase) appelé par MediaPipe.
+-keep class com.google.common.flogger.** { *; }
+-keep class com.google.android.datatransport.** { *; }
+-keep class com.google.firebase.encoders.** { *; }
+-dontwarn com.google.common.flogger.**
+-dontwarn com.google.android.datatransport.**
+-dontwarn com.google.firebase.encoders.**
 
 # Numéros de ligne conservés : un rapport de plantage reste lisible (avec le fichier app/build/outputs/mapping/…/mapping.txt).
 -keepattributes SourceFile,LineNumberTable

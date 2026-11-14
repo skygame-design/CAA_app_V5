@@ -146,7 +146,10 @@ class GazeTracker(private val context: Context) {
         executor.execute {
             try {
                 if (landmarker == null) landmarker = createLandmarker()
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // Throwable et pas seulement Exception : un échec au chargement d'une classe de MediaPipe
+                // (ExceptionInInitializerError, bibliothèque native absente…) est une Error, qui faisait planter l'app.
+                // Ici, la commande oculaire affiche son message d'erreur et le reste de Nina continue de fonctionner.
                 Log.e("Nina-Regard", "Détection du visage impossible", e)
                 _error.value = "La détection du visage n'a pas pu démarrer."
                 running = false
