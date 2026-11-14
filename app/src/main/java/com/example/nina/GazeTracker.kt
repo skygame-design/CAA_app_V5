@@ -62,10 +62,79 @@ class GazeTracker(private val context: Context) {
     // Images en pleine définition gardées le temps que MediaPipe renvoie son résultat (retrouvées par leur horodatage)
     private val fullFrames = java.util.concurrent.ConcurrentHashMap<Long, FullFrame>()
 
-    /** Image caméra telle quelle (non tournée : la tourner en entier coûte cher) et sa rotation. */
-    private class FullFrame(val bitmap: Bitmap, val rotation: Int) {
-        val rotatedWidth get() = if (rotation % 180 == 0) bitmap.width else bitmap.height
-        val rotatedHeight get() = if (rotation % 180 == 0) bitmap.height else bitmap.width
+    /**
+     * Image caméra telle quelle (non tournée : la tourner en entier coûte cher), sa rotation et sa taille utile
+     * (le bitmap peut être un peu plus large : octets de remplissage en fin de rangée).
+     */
+    private class FullFrame(val bitmap: Bitmap, val rotation: Int, val width: Int, val height: Int) {
+        val rotatedWidth get() = if (rotation % 180 == 0) width else height
+        val rotatedHeight get() = if (rotation % 180 == 0) height else width
+    }
+
+    // Images réutilisées d'une prise de vue à l'autre. En 1920 × 1440, une image RGBA pèse 11 Mo : en allouer une
+    // nouvelle 30 fois par seconde (plus sa copie réduite) faisait tourner le ramasse-miettes en permanence,
+    // d'où des saccades dans l'interface pendant que la caméra tourne. Aucun bitmap n'est recyclé à la main :
+    // ceux qui sortent du réservoir sont libérés par le ramasse-miettes, sans risque d'accès à une image recyclée.
+    private val fullPool = java.util.concurrent.ConcurrentLinkedQueue<Bitmap>()
+    private val smallBitmaps = arrayOfNulls<Bitmap>(2) // En alternance : MediaPipe copie l'image, on lui laisse une marge
+    private var smallIndex = 0
+    private var paddedBuffer: java.nio.ByteBuffer? = null
+    private val drawPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+
+    private fun acquireFull(width: Int, height: Int): Bitmap {
+        while (true) {
+            val b = fullPool.poll() ?: return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            if (b.width == width && b.height == height) return b // Une image d'une autre taille est simplement abandonnée
+        }
+    }
+
+    /** Rend l'image au réservoir (3 au plus ; caméra arrêtée, elle est abandonnée). */
+    private fun releaseFull(bitmap: Bitmap) {
+        if (running && fullPool.size < 3) fullPool.offer(bitmap)
+    }
+
+    /** Copie l'image caméra (RGBA, une seule plane) dans une image réutilisée ; null si le format n'est pas celui attendu. */
+    private fun copyToReusable(proxy: ImageProxy): Bitmap? {
+        val plane = proxy.planes.singleOrNull() ?: return null
+        if (plane.pixelStride != 4 || plane.rowStride % 4 != 0) return null
+        val strideWidth = plane.rowStride / 4
+        if (strideWidth < proxy.width) return null
+        val bitmap = acquireFull(strideWidth, proxy.height)
+        val buffer = plane.buffer
+        buffer.rewind()
+        if (buffer.remaining() >= bitmap.byteCount) {
+            bitmap.copyPixelsFromBuffer(buffer)
+        } else {
+            // Dernière rangée livrée sans ses octets de remplissage : on passe par un tampon de la bonne taille
+            val padded = paddedBuffer?.takeIf { it.capacity() == bitmap.byteCount }
+                ?: java.nio.ByteBuffer.allocateDirect(bitmap.byteCount).also { paddedBuffer = it }
+            padded.clear(); padded.put(buffer); padded.rewind()
+            bitmap.copyPixelsFromBuffer(padded)
+        }
+        return bitmap
+    }
+
+    /**
+     * Image réduite et tournée pour MediaPipe, dessinée dans une image réutilisée (même résultat que
+     * Bitmap.createBitmap avec une matrice, sans allocation). Les colonnes de remplissage de la source tombent hors cadre.
+     */
+    private fun scaledRotated(src: Bitmap, width: Int, height: Int, rotation: Int, scale: Float): Bitmap {
+        val outW = Math.round((if (rotation % 180 == 0) width else height) * scale).coerceAtLeast(1)
+        val outH = Math.round((if (rotation % 180 == 0) height else width) * scale).coerceAtLeast(1)
+        val dst = smallBitmaps[smallIndex]?.takeIf { it.width == outW && it.height == outH }
+            ?: Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888).also { smallBitmaps[smallIndex] = it }
+        smallIndex = 1 - smallIndex
+        val matrix = Matrix().apply {
+            postScale(scale, scale)
+            postRotate(rotation.toFloat())
+            when (rotation) { // Après la rotation, l'image est ramenée dans le cadre
+                90 -> postTranslate(outW.toFloat(), 0f)
+                180 -> postTranslate(outW.toFloat(), outH.toFloat())
+                270 -> postTranslate(0f, outH.toFloat())
+            }
+        }
+        android.graphics.Canvas(dst).drawBitmap(src, matrix, drawPaint)
+        return dst
     }
     private var refinedCount = 0
     private var refineTried = 0
@@ -77,7 +146,10 @@ class GazeTracker(private val context: Context) {
         executor.execute {
             try {
                 if (landmarker == null) landmarker = createLandmarker()
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // Throwable et pas seulement Exception : un échec au chargement d'une classe de MediaPipe
+                // (ExceptionInInitializerError, bibliothèque native absente…) est une Error, qui faisait planter l'app.
+                // Ici, la commande oculaire affiche son message d'erreur et le reste de Nina continue de fonctionner.
                 Log.e("Nina-Regard", "Détection du visage impossible", e)
                 _error.value = "La détection du visage n'a pas pu démarrer."
                 running = false
@@ -91,6 +163,8 @@ class GazeTracker(private val context: Context) {
         running = false
         ContextCompat.getMainExecutor(context).execute { cameraProvider?.unbindAll() }
         _frames.value = null
+        // Caméra arrêtée : les images en attente et le réservoir sont abandonnés (mémoire rendue)
+        fullFrames.clear(); fullPool.clear()
     }
 
     private fun createLandmarker(): FaceLandmarker {
@@ -137,21 +211,29 @@ class GazeTracker(private val context: Context) {
     private fun analyze(proxy: ImageProxy) {
         try {
             if (!running) return
-            val raw = proxy.toBitmap()
+            val width = proxy.width; val height = proxy.height
             val rotation = proxy.imageInfo.rotationDegrees
+            val raw = copyToReusable(proxy) ?: proxy.toBitmap() // Format inattendu : conversion de CameraX (nouvelle image)
             // MediaPipe sur une image réduite et tournée, en une seule opération ; l'image pleine définition
             // reste non tournée : seuls les deux petits carrés autour des yeux y seront lus
-            val scale = if (maxOf(raw.width, raw.height) > 1300) 0.5f else 1f
-            val small = if (rotation == 0 && scale == 1f) raw else Bitmap.createBitmap(
-                raw, 0, 0, raw.width, raw.height, Matrix().apply { postScale(scale, scale); postRotate(rotation.toFloat()) }, true
-            )
+            val scale = if (maxOf(width, height) > 1300) 0.5f else 1f
+            val small = if (rotation == 0 && scale == 1f && raw.width == width) raw else scaledRotated(raw, width, height, rotation, scale)
             if (frameCount++ % 15 == 0) lastBrightness = brightnessOf(small)
             val time = SystemClock.uptimeMillis()
-            if (fineIris && scale < 1f) {
-                fullFrames[time] = FullFrame(raw, rotation)
-                fullFrames.keys.filter { it < time - 1000 }.forEach { fullFrames.remove(it) }
+            val keepFull = fineIris && scale < 1f
+            if (keepFull) {
+                fullFrames.put(time, FullFrame(raw, rotation, width, height))?.let { releaseFull(it.bitmap) }
+                // Résultats jamais revenus (image sautée par MediaPipe quand il est débordé) : on ne garde que
+                // les plus récentes, sinon ces images de 11 Mo s'accumulaient
+                fullFrames.keys.filter { it < time - 1000 }.forEach { key -> fullFrames.remove(key)?.let { releaseFull(it.bitmap) } }
+                while (fullFrames.size > 4) {
+                    val oldest = fullFrames.keys.minOrNull() ?: break
+                    fullFrames.remove(oldest)?.let { releaseFull(it.bitmap) }
+                }
             }
             landmarker?.detectAsync(BitmapImageBuilder(small).build(), time)
+            // detectAsync a copié l'image : l'image pleine définition peut resservir, sauf si elle attend son résultat
+            if (!keepFull) releaseFull(raw)
         } catch (e: Exception) {
             Log.w("Nina-Regard", "Image ignorée : ${e.message}")
         } finally {
@@ -170,6 +252,7 @@ class GazeTracker(private val context: Context) {
             GazeFeatures.from(points, aspect = width.toFloat() / height.coerceAtLeast(1))
                 ?.let { f -> if (pose == null) f else f.copy(yaw = pose.first, pitch = pose.second) }
         }
+        full?.let { releaseFull(it.bitmap) } // Les yeux ont été lus : l'image peut resservir
         _frames.value = GazeFrame(SystemClock.uptimeMillis(), face != null, features, lastBrightness)
         // Mesures de réglage toutes les 30 images analysées (compteur propre à ce fil de résultats)
         if (++resultCount % 30 == 0) {
@@ -204,13 +287,13 @@ class GazeTracker(private val context: Context) {
             val w = (2 * half).coerceAtMost(fw - left); val h = (2 * half).coerceAtMost(fh - top)
             if (w < 8 || h < 8) return@forEach
             // Le carré correspondant dans l'image d'origine
-            val (ax, ay) = rotatedToSource(left, top, src.width, src.height, full.rotation)
-            val (bx, by) = rotatedToSource(left + w - 1, top + h - 1, src.width, src.height, full.rotation)
+            val (ax, ay) = rotatedToSource(left, top, full.width, full.height, full.rotation)
+            val (bx, by) = rotatedToSource(left + w - 1, top + h - 1, full.width, full.height, full.rotation)
             val sl = minOf(ax, bx); val st = minOf(ay, by); val sw = maxOf(ax, bx) - sl + 1; val sh = maxOf(ay, by) - st + 1
             val argb = IntArray(sw * sh)
             src.getPixels(argb, 0, sw, sl, st, sw, sh)
             val gray = IntArray(w * h) { i ->
-                val (x, y) = rotatedToSource(left + i % w, top + i / w, src.width, src.height, full.rotation)
+                val (x, y) = rotatedToSource(left + i % w, top + i / w, full.width, full.height, full.rotation)
                 val c = argb[(y - st) * sw + (x - sl)]
                 (0.299 * ((c shr 16) and 0xFF) + 0.587 * ((c shr 8) and 0xFF) + 0.114 * (c and 0xFF)).toInt()
             }
@@ -243,7 +326,9 @@ class GazeTracker(private val context: Context) {
 /**
  * Un profil de calibration (par exemple « Table du salon ») : les points mesurés et la date.
  * Les points bruts sont gardés pour pouvoir compléter la calibration plus tard sans tout refaire.
+ * @Keep : enregistré en JSON (Gson).
  */
+@androidx.annotation.Keep
 data class GazeProfile(
     val name: String,
     val samples: List<GazeSample>,
@@ -262,6 +347,22 @@ data class GazeProfile(
     fun correction() = GazeCorrection(refFaceSize, offsetX, offsetY + autoOffsetY)
     /** Sans le recentrage appris : l'écran principal l'applique lui-même, pour pouvoir l'ajuster sans tout relancer. */
     fun baseCorrection() = GazeCorrection(refFaceSize, offsetX, offsetY)
+
+    /**
+     * Profil relu en JSON, vérifié : Gson peut laisser nuls des champs déclarés non nuls (données abîmées, ancienne
+     * version). La calibration est calculée dès l'ouverture de l'app : un profil incohérent la ferait planter à
+     * chaque démarrage. Points abîmés retirés ; profil sans nom ou sans points écarté ; compensation incomplète ignorée.
+     */
+    @Suppress("SENSELESS_COMPARISON", "USELESS_CAST", "UNCHECKED_CAST")
+    fun validated(): GazeProfile? {
+        if ((name as String?) == null || (samples as List<GazeSample>?) == null) return null
+        val valid = (samples as List<GazeSample?>).filterNotNull().filter { (it.features as DoubleArray?) != null }
+        val size = valid.firstOrNull()?.features?.size ?: return null
+        val compensation = headCompensation?.takeIf {
+            (it.yawSlopes as DoubleArray?) != null && (it.pitchSlopes as DoubleArray?) != null
+        }
+        return copy(samples = valid.filter { it.features.size == size }, headCompensation = compensation)
+    }
 }
 
 /** Enregistrement des profils de calibration et des réglages de la commande oculaire. */
@@ -275,7 +376,7 @@ object GazeStore {
         val json = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_PROFILES, null) ?: return emptyList()
         return runCatching {
             GsonInstance.gson.fromJson<List<GazeProfile>>(json, object : com.google.gson.reflect.TypeToken<List<GazeProfile>>() {}.type)
-        }.getOrNull().orEmpty()
+        }.getOrNull().orEmpty().mapNotNull { it.validated() }
     }
 
     fun saveProfile(context: Context, profile: GazeProfile) {

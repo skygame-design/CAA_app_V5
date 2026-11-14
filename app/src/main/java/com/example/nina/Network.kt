@@ -5,6 +5,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Path
 
+@androidx.annotation.Keep // Réponse lue en JSON (Gson)
 data class ArasaacSearchResponse(val _id: Int)
 
 interface ArasaacService {

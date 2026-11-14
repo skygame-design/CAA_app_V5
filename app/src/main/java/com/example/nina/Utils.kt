@@ -13,6 +13,7 @@ import java.net.URL
 import android.media.MediaRecorder
 import android.os.Build
 import androidx.core.content.edit
+import androidx.annotation.Keep
 
 
 
@@ -119,7 +120,9 @@ fun isRemoteImage(imageUrl: String?) = imageUrl != null && (imageUrl.startsWith(
 /**
  * Contenu complet d'un fichier de sauvegarde : grille, Core Words et Quick Fires.
  * coreWords et quickFires sont null pour les anciennes sauvegardes (grille seule).
+ * @Keep : enregistré en JSON (Gson).
  */
+@Keep
 data class NinaBackup(
     val buttons: List<AACCell>,
     val coreWords: List<AACCell>? = null,
@@ -189,9 +192,10 @@ fun parseBackup(json: String): NinaBackup {
  */
 fun loadStats(context: Context): Map<String, Int> {
     val json = context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).getString("usage_stats", null)
-    return if (json != null) {
-        GsonInstance.gson.fromJson(json, object : TypeToken<Map<String, Int>>() {}.type)
-    } else emptyMap()
+    if (json == null) return emptyMap()
+    // Données abîmées : les statistiques repartent de zéro (le journal daté, lui, est un fichier à part)
+    return runCatching { GsonInstance.gson.fromJson<Map<String, Int>?>(json, object : TypeToken<Map<String, Int>>() {}.type) }
+        .getOrNull().orEmpty().filter { (k, v) -> (k as String?) != null && (v as Int?) != null }
 }
 
 fun saveStats(context: Context, stats: Map<String, Int>) {

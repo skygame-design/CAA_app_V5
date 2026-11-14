@@ -32,13 +32,14 @@ object UsageLog {
     fun append(context: Context, type: UsageType, text: String, time: LocalDateTime = LocalDateTime.now()) {
         if (text.isBlank()) return
         synchronized(lock) {
-            file(context).appendText(formatLine(UsageEvent(time, type, text)) + "\n")
+            // Tablette pleine… : on perd une ligne du journal, pas l'app (appelé hors du fil de l'interface, sans filet)
+            runCatching { file(context).appendText(formatLine(UsageEvent(time, type, text)) + "\n") }
         }
     }
 
     fun read(context: Context): List<UsageEvent> = synchronized(lock) {
         val f = file(context)
-        if (!f.exists()) emptyList() else f.readLines().mapNotNull { parseLine(it) }
+        if (!f.exists()) emptyList() else runCatching { f.readLines().mapNotNull { parseLine(it) } }.getOrDefault(emptyList())
     }
 
     fun clear(context: Context) = synchronized(lock) { file(context).delete(); Unit }

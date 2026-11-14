@@ -1,6 +1,8 @@
 package com.example.nina
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /*
  * Opérations sur les listes de pictos (grille, colonne de gauche, phrases rapides) :
@@ -12,10 +14,17 @@ import android.content.Context
  * 1. les pictos marqués "FETCH" reçoivent la première image ARASAAC trouvée pour leur libellé ;
  * 2. toute image encore sur le web est téléchargée dans la tablette (fichier nommé d'après l'id du picto).
  * En cas d'échec (pas de réseau), l'adresse web est gardée et on réessaiera au prochain démarrage.
+ *
+ * Les téléchargements peuvent durer plusieurs minutes (premier démarrage, grille prête installée) pendant que
+ * l'adulte déplace ou supprime des pictos. On parcourt donc une copie de chaque liste, et le picto modifié est
+ * remis à sa place sur le fil de l'interface, retrouvé par son id : parcourir la liste affichée pendant qu'elle
+ * change faisait planter l'app (ConcurrentModificationException).
  */
-internal suspend fun updateCellsWithImages(context: Context, vararg lists: MutableList<AACCell>) {
+internal suspend fun updateCellsWithImages(context: Context, vararg lists: MutableList<AACCell>): Boolean {
+    var changed = false
     lists.forEach { list ->
-        list.forEachIndexed { i, original ->
+        val snapshot = withContext(Dispatchers.Main) { list.toList() }
+        snapshot.forEach { original ->
             var cell = original
             // Fichier local disparu (sauvegarde restaurée sur une autre tablette) : on repart de l'adresse d'origine
             val local = cell.imageUrl
@@ -41,10 +50,18 @@ internal suspend fun updateCellsWithImages(context: Context, vararg lists: Mutab
                     }
                 } catch (_: Exception) {} // Pas de réseau : on réessaiera au prochain démarrage
             }
-            if (cell !== original && i < list.size && list[i].id == original.id) list[i] = cell
-            if (cell.isFolder) updateCellsWithImages(context, cell.content)
+            if (cell !== original) {
+                val updated = cell
+                val replaced = withContext(Dispatchers.Main) {
+                    val index = list.indexOfFirst { it.id == original.id } // Picto supprimé entre-temps : rien à faire
+                    if (index >= 0) { list[index] = updated.copy(content = list[index].content); true } else false
+                }
+                if (replaced) changed = true
+            }
+            if (cell.isFolder && updateCellsWithImages(context, cell.content)) changed = true
         }
     }
+    return changed // Vrai si au moins un picto a été modifié (il faut alors enregistrer)
 }
 
 /** Image actuelle du picto (avant modification), pour savoir si l'utilisateur l'a changée. */

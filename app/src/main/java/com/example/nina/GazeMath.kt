@@ -112,6 +112,7 @@ data class GazeFeatures(
 }
 
 /** Un point de calibration : les caractéristiques (médiane de plusieurs images) quand l'enfant regardait la cible. */
+@androidx.annotation.Keep // Enregistré en JSON (Gson) dans le profil de calibration
 data class GazeSample(val features: DoubleArray, val targetX: Double, val targetY: Double)
 
 /**
@@ -441,6 +442,7 @@ fun rotatedToSource(x: Int, y: Int, w: Int, h: Int, rotation: Int): Pair<Int, In
  *
  * Ordre des pentes : gazeX, gazeY, lidRatio, meanOpenness, headX, headY, faceX, faceY.
  */
+@androidx.annotation.Keep // Enregistré en JSON (Gson) dans le profil de calibration
 data class HeadCompensation(
     val yaw0: Double, val pitch0: Double,
     val yawSlopes: DoubleArray, val pitchSlopes: DoubleArray

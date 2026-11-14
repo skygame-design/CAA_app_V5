@@ -258,7 +258,7 @@ fun AACCellView(
         Card(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer(scaleX = scale, scaleY = scale)
+                .graphicsLayer { scaleX = scale; scaleY = scale } // Lu au dessin : l'animation d'appui ne recompose pas la case
                 .combinedClickable(
                     interactionSource = interactionSource,
                     indication = LocalIndication.current,
@@ -525,9 +525,6 @@ val LocalDragAndDropState = compositionLocalOf { DragAndDropState() }
 @Composable
 fun DragAndDropRoot(content: @Composable () -> Unit) {
     val state = remember { DragAndDropState() }
-    
-    // LOG DE RECOMPOSITION DU PARENT
-    SideEffect { Log.w("DragDrop-Trace", "🔄 RECOMPOSITION : DragAndDropRoot") }
 
     CompositionLocalProvider(LocalDragAndDropState provides state) {
         Box(modifier = Modifier.fillMaxSize()) {

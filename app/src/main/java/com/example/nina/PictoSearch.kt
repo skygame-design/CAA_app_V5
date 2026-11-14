@@ -1,6 +1,7 @@
 package com.example.nina
 
 import android.util.Log
+import androidx.annotation.Keep
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -15,7 +16,9 @@ data class PictoResult(val imageUrl: String, val source: String, val licence: St
 
 // --- Global Symbols (Mulberry, Sclera, Blissymbolics… avec libellés français) ---
 
+@Keep // Réponses lues en JSON (Gson)
 data class GlobalSymbolsLabel(val text: String?, val picto: GlobalSymbolsPicto?)
+@Keep
 data class GlobalSymbolsPicto(
     @SerializedName("symbolset_id") val symbolsetId: Int?,
     @SerializedName("image_url") val imageUrl: String?
@@ -33,6 +36,7 @@ interface GlobalSymbolsService {
 
 // --- OpenSymbols (Tawasol, Twemoji, Noun Project, icônes…) ---
 
+@Keep // Réponse lue en JSON (Gson)
 data class OpenSymbolsResult(
     val name: String?,
     @SerializedName("image_url") val imageUrl: String?,
