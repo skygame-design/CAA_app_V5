@@ -347,6 +347,22 @@ data class GazeProfile(
     fun correction() = GazeCorrection(refFaceSize, offsetX, offsetY + autoOffsetY)
     /** Sans le recentrage appris : l'écran principal l'applique lui-même, pour pouvoir l'ajuster sans tout relancer. */
     fun baseCorrection() = GazeCorrection(refFaceSize, offsetX, offsetY)
+
+    /**
+     * Profil relu en JSON, vérifié : Gson peut laisser nuls des champs déclarés non nuls (données abîmées, ancienne
+     * version). La calibration est calculée dès l'ouverture de l'app : un profil incohérent la ferait planter à
+     * chaque démarrage. Points abîmés retirés ; profil sans nom ou sans points écarté ; compensation incomplète ignorée.
+     */
+    @Suppress("SENSELESS_COMPARISON", "USELESS_CAST", "UNCHECKED_CAST")
+    fun validated(): GazeProfile? {
+        if ((name as String?) == null || (samples as List<GazeSample>?) == null) return null
+        val valid = (samples as List<GazeSample?>).filterNotNull().filter { (it.features as DoubleArray?) != null }
+        val size = valid.firstOrNull()?.features?.size ?: return null
+        val compensation = headCompensation?.takeIf {
+            (it.yawSlopes as DoubleArray?) != null && (it.pitchSlopes as DoubleArray?) != null
+        }
+        return copy(samples = valid.filter { it.features.size == size }, headCompensation = compensation)
+    }
 }
 
 /** Enregistrement des profils de calibration et des réglages de la commande oculaire. */
@@ -360,7 +376,7 @@ object GazeStore {
         val json = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_PROFILES, null) ?: return emptyList()
         return runCatching {
             GsonInstance.gson.fromJson<List<GazeProfile>>(json, object : com.google.gson.reflect.TypeToken<List<GazeProfile>>() {}.type)
-        }.getOrNull().orEmpty()
+        }.getOrNull().orEmpty().mapNotNull { it.validated() }
     }
 
     fun saveProfile(context: Context, profile: GazeProfile) {

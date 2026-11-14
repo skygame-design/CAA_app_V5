@@ -85,11 +85,14 @@ class CellContentAdapter : TypeAdapterFactory {
 /**
  * Gson ignore les valeurs par défaut Kotlin : les pictos enregistrés avant l'ajout de l'id
  * reviennent avec id = null (et parfois content = null). On les complète ici, récursivement.
+ * Un fichier abîmé ou d'une autre application peut aussi contenir un picto nul ou sans libellé :
+ * il est ignoré, ou reçoit un libellé vide, au lieu de faire planter l'affichage plus tard.
  */
-@Suppress("USELESS_CAST")
-fun normalizeCells(cells: List<AACCell>?): List<AACCell> = (cells ?: emptyList()).map { cell ->
+@Suppress("USELESS_CAST", "UNCHECKED_CAST")
+fun normalizeCells(cells: List<AACCell>?): List<AACCell> = ((cells ?: emptyList()) as List<AACCell?>).filterNotNull().map { cell ->
     val children = normalizeCells(cell.content as List<AACCell>?)
     cell.copy(
+        label = (cell.label as String?) ?: "",
         id = (cell.id as String?) ?: newCellId(),
         content = mutableStateListOf<AACCell>().apply { addAll(children) }
     )

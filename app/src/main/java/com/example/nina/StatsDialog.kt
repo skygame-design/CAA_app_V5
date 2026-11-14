@@ -181,8 +181,9 @@ fun StatsDialog(
                     if (events.isEmpty()) {
                         android.widget.Toast.makeText(context, "Aucune donnée datée à exporter", android.widget.Toast.LENGTH_SHORT).show()
                     } else scope.launch {
-                        val file = withContext(Dispatchers.IO) { UsageLog.exportCsv(context, events) }
-                        shareStatsFile(context, file)
+                        val file = withContext(Dispatchers.IO) { runCatching { UsageLog.exportCsv(context, events) }.getOrNull() }
+                        if (file != null) shareStatsFile(context, file)
+                        else android.widget.Toast.makeText(context, "Export impossible (tablette pleine ?)", android.widget.Toast.LENGTH_LONG).show()
                     }
                 }) {
                     Icon(Icons.Default.Share, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))

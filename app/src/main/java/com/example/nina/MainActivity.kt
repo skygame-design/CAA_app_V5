@@ -739,12 +739,14 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                             showEditDialog = false
                         },
                         onEditSave = { edited, moveRequested, moveTarget ->
+                            // Lu ici, sur le fil de l'interface : parcourir les listes depuis l'arrière-plan pendant qu'elles changent peut planter
+                            val previousImage = targetCellImage(edited, coreWords, currentButtons, quickFires)
                             scope.launch(Dispatchers.IO) {
                                 val newUrl = edited.imageUrl
                                 // Image du web : enregistrée dans la tablette ; si le téléchargement échoue, on garde l'adresse (réessai au démarrage)
                                 val isNewRemote = isRemoteImage(newUrl)
                                 val finalUrl = if (isNewRemote) saveImageLocally(context, newUrl!!, "picto_${edited.id}_${System.currentTimeMillis()}") ?: newUrl else newUrl
-                                val finalSource = if (isNewRemote) newUrl else if (newUrl == targetCellImage(edited, coreWords, currentButtons, quickFires)) edited.sourceUrl else null
+                                val finalSource = if (isNewRemote) newUrl else if (newUrl == previousImage) edited.sourceUrl else null
                                 withContext(Dispatchers.Main) {
                                     // On modifie d'abord, puis on déplace la version modifiée (sinon les modifications étaient perdues)
                                     val updated = replaceCellInLists(edited.copy(imageUrl = finalUrl, sourceUrl = finalSource), coreWords, currentButtons, quickFires)
