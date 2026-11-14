@@ -399,7 +399,7 @@ private val helpTopics = listOf(
             HelpRows(
                 "Dans la barre du mode adulte", listOf(
                     "Taille de grille" to "Disposition › − et + : de 1 à 8 pictos par rangée. La grille remplit l'écran sans défiler ; s'il y a trop de pictos, des pages ◀ ▶ apparaissent. Nouveau",
-                    "Réglages › Calibrer le tactile" to "attraper 5 fois la coccinelle : l'écran se décale pour compenser",
+                    "Réglages › Calibrer le tactile" to "attraper 5 fois la coccinelle : si l'enfant touche toujours un peu à côté, ses touchers sont recentrés (l'écran ne bouge pas)",
                     "Réglages › Mode Kiosque" to "empêche de quitter Nina par erreur"
                 )
             ),

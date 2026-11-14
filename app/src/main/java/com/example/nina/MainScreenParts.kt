@@ -295,7 +295,8 @@ fun QuickPhrasesColumn(
     columnModifier: Modifier = Modifier
 ) {
     Column(
-        modifier = Modifier.width(110.dp).fillMaxHeight().padding(vertical = 16.dp),
+        // Marge à droite égale à celle de gauche (16 dp) : la colonne ne touche plus le bord de l'écran
+        modifier = Modifier.padding(end = 16.dp).width(110.dp).fillMaxHeight().padding(vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {

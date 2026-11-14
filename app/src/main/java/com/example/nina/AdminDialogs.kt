@@ -1,5 +1,7 @@
 package com.example.nina
 
+import androidx.compose.ui.layout.layout
+
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -308,11 +310,12 @@ fun CalibrationTest(onFinished: (Float, Float) -> Unit) {
 
                 currentStep++
                 if (currentStep >= targets.size) {
-                    val avgX = errorsX.average().toFloat()
-                    val avgY = errorsY.average().toFloat()
-                    // On convertit les pixels en dp pour l'offset
+                    // Décalage habituel en dp (médiane : un toucher raté ne fausse pas tout), borné
                     with(density) {
-                        onFinished(avgX.toDp().value, avgY.toDp().value)
+                        onFinished(
+                            touchCorrection(errorsX.map { it.toDp().value }),
+                            touchCorrection(errorsY.map { it.toDp().value })
+                        )
                     }
                 }
             }
@@ -323,8 +326,22 @@ fun CalibrationTest(onFinished: (Float, Float) -> Unit) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (currentStep < targets.size) {
                 val target = targets[currentStep]
-                Text("🐞", fontSize = 80.sp, modifier = Modifier.align(BiasAlignment(target.x * 2 - 1, target.y * 2 - 1)))
+                // Centre de la coccinelle exactement à la position de la cible (fraction de l'écran)
+                Text("🐞", fontSize = 80.sp, modifier = Modifier.layout { measurable, constraints ->
+                    val p = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+                    layout(constraints.maxWidth, constraints.maxHeight) {
+                        p.place((target.x * constraints.maxWidth - p.width / 2f).toInt(), (target.y * constraints.maxHeight - p.height / 2f).toInt())
+                    }
+                })
             }
         }
     }
+}
+
+/** Écart retenu (dp) : médiane des écarts mesurés, bornée à ±48 dp (un toucher très à côté ne décale pas tout). */
+fun touchCorrection(errors: List<Float>, maxDp: Float = 48f): Float {
+    if (errors.isEmpty()) return 0f
+    val sorted = errors.sorted()
+    val median = if (sorted.size % 2 == 1) sorted[sorted.size / 2] else (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2
+    return median.coerceIn(-maxDp, maxDp)
 }

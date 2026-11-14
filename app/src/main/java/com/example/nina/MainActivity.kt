@@ -60,6 +60,9 @@ import android.util.Log
  * Activité principale de l'application Nina.
  * Gère l'initialisation du TTS, le chargement des données, et l'interface utilisateur globale.
  */
+private const val TOUCH_X = "touch_error_x"
+private const val TOUCH_Y = "touch_error_y"
+
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     // Permission pour l'enregistrement audio des pictos personnalisés
     private val requestPermissionLauncher =
@@ -132,9 +135,19 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     var isAddingToCore by remember { mutableStateOf(false) }
                     var isAddingToQuickFires by remember { mutableStateOf(false) }
 
-                    var offsetX by remember { mutableFloatStateOf(context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).getFloat("offset_x", 0f)) }
-                    var offsetY by remember { mutableFloatStateOf(context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).getFloat("offset_y", 0f)) }
+                    // Correction du tactile (dp) : décalage habituel des touchers, mesuré par « Calibrer le tactile ».
+                    // L'ancienne version déplaçait tout l'écran (bords rognés) sans corriger les touchers : réglage effacé.
+                    val touchPrefs = context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE)
+                    var touchErrorX by remember { mutableFloatStateOf(touchPrefs.getFloat(TOUCH_X, 0f)) }
+                    var touchErrorY by remember { mutableFloatStateOf(touchPrefs.getFloat(TOUCH_Y, 0f)) }
+                    LaunchedEffect(Unit) { touchPrefs.edit().remove("offset_x").remove("offset_y").apply() }
                     var showCalibration by remember { mutableStateOf(false) }
+                    // Appliquée aux touchers seulement (voir dispatchTouchEvent), jamais pendant la calibration (mesure brute)
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    SideEffect {
+                        with(density) { touchShiftX = touchErrorX.dp.toPx(); touchShiftY = touchErrorY.dp.toPx() }
+                        touchCorrectionOn = !showCalibration
+                    }
                     var showWordFinder by remember { mutableStateOf(false) }
 
                     var voicePitch by remember { mutableFloatStateOf(context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).getFloat("voice_pitch", 1.2f)) }
@@ -334,7 +347,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     Surface(
                         modifier = Modifier
                             .fillMaxSize()
-                            .offset(x = -offsetX.dp, y = -offsetY.dp)
                             .then(rootModifier),
                         color = if (isCviMode) Color.Black else Color(backgroundColor)
                     ) {
@@ -715,8 +727,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         },
                         showHelp = showHelpDialog, onHelpDismiss = { showHelpDialog = false },
                         showCalibration = showCalibration, onCalibrationFinished = { x, y ->
-                            offsetX = x; offsetY = y
-                            context.getSharedPreferences("nina_prefs", Context.MODE_PRIVATE).edit().putFloat("offset_x", x).putFloat("offset_y", y).apply()
+                            touchErrorX = x; touchErrorY = y
+                            touchPrefs.edit().putFloat(TOUCH_X, x).putFloat(TOUCH_Y, y).apply()
                             showCalibration = false
                         },
                         showWordFinder = showWordFinder, coreWords = coreWords, quickFires = quickFires,
@@ -843,6 +855,20 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
 
     // Android réaffiche les barres après certaines actions (notification, retour dans l'app…) : on les remasque
+    // Correction du tactile, en pixels : l'enfant touche en moyenne à cet écart de la cible (voir CalibrationTest)
+    private var touchShiftX = 0f
+    private var touchShiftY = 0f
+    private var touchCorrectionOn = true
+
+    /**
+     * Chaque toucher est ramené vers là où l'enfant voulait toucher, avant d'atteindre les pictos.
+     * L'affichage, lui, ne bouge pas (rien n'est rogné sur les bords). Les fenêtres (dialogues) ne sont pas concernées.
+     */
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (touchCorrectionOn && (touchShiftX != 0f || touchShiftY != 0f)) ev.offsetLocation(-touchShiftX, -touchShiftY)
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars(window)

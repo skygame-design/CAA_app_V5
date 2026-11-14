@@ -1,6 +1,7 @@
 package com.example.nina
 
 import androidx.compose.runtime.mutableStateListOf
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -51,5 +52,20 @@ class SideColumnsTest {
         assertFalse(SideColumns.hiddenOnScreen(false, emptyList(), coreWords, quickFires))
         // Colonnes affichées : le guidage ne les masque jamais
         assertFalse(SideColumns.hiddenOnScreen(false, listOf(manger), coreWords, quickFires))
+    }
+}
+
+class TouchCorrectionTest {
+    @Test
+    fun medianeDesEcarts_unTouchRateNeFaussePasTout() {
+        // 4 touchers 10 dp à droite, un toucher complètement à côté
+        assertEquals(10f, touchCorrection(listOf(10f, 9f, 300f, 11f, 10f)), 0.001f)
+    }
+
+    @Test
+    fun ecartBorne_etAucuneMesure() {
+        assertEquals(48f, touchCorrection(listOf(100f, 120f, 90f)), 0.001f)
+        assertEquals(-48f, touchCorrection(listOf(-100f, -120f, -90f)), 0.001f)
+        assertEquals(0f, touchCorrection(emptyList()), 0.001f)
     }
 }
